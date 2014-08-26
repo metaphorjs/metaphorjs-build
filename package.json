@@ -1,0 +1,20 @@
+{
+    "name": "metaphorjs-build",
+    "version": "0.0.1",
+    "description": "MetaphorJs builder",
+    "main": "builder/builder.js",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/kuindji/metaphorjs-build.git"
+    },
+    "author": "johann kuindji",
+    "license": "MIT",
+    "homepage": "https://github.com/kuindji/metaphorjs-build",
+    "bugs": {
+        "url": "https://github.com/kuindji/metaphorjs-build/issues"
+    },
+    "dependencies": {
+        "closurecompiler": "*",
+        "exec-sync": "*"
+    }
+}
