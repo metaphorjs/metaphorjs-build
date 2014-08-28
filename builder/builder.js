@@ -1,11 +1,16 @@
 
 var path            = require("path"),
     fs              = require("fs"),
-    ClosureCompiler = require("closurecompiler"),
     child           = require("child_process"),
+    parser          = require("esprima"),
     allFiles        = {},
 
-    rRequire        = new RegExp('//#require [^\n]+', 'g'),
+    rStrict         = /'use strict'|"use strict";?/g,
+    rRequires       = /([^\s]+)\s*=\s*require\(['|"]([^)]+)['|"]\)/,
+    rInclude        = /[^=\s]?\s*(require\(['|"]([^)]+)['|"]\);?)/,
+    rEmptyVar       = /var[\s|,]*;/g,
+
+
 
     isFile          = function(filePath) {
         return fs.existsSync(filePath) && fs.lstatSync(filePath).isFile();
@@ -13,63 +18,215 @@ var path            = require("path"),
 
     isDir           = function(dirPath) {
         return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
-    };
+    },
 
+    getOrCreate     = function(file) {
 
-
-var readRequires    = function(filePath, content, currentAction) {
-
-    content         = content.toString();
-
-    var matches     = content.match(rRequire) || [],
-        loc         = path.dirname(filePath) + "/",
-        i, l,
-        req,
-        requires    = [],
-        acts,
-        aInx,
-        skip;
-
-    for (i = 0, l = matches.length; i < l; i++) {
-        content     = content.replace(matches[i], "");
-        req         = matches[i].replace('//#require ', '').trim();
-
-        if (req.substr(0,1) == "(") {
-            aInx    = req.indexOf(")");
-            acts    = req.substr(1, aInx - 1).split(",");
-            req     = req.substr(aInx + 1).trim();
-            skip    = false;
-
-            if (currentAction) {
-                acts.forEach(function(action) {
-
-                    if (action.substr(0,1) == "!") {
-                        if (currentAction == action.substr(1)) {
-                            skip = true;
-                            return false;
-                        }
-                    }
-                    else if (currentAction == action) {
-                        skip = true;
-                        return false;
-                    }
-                });
-            }
-
-            if (skip) {
-                continue;
-            }
+        if (!allFiles[file]) {
+            allFiles[file] = new File(file);
         }
 
-        req         = path.normalize(loc + req);
-        requires.push(req);
+        return allFiles[file];
+    };
+
+
+
+var File = function(filePath) {
+
+    var self    = this;
+
+    self.base       = path.dirname(filePath) + "/";
+    self.path       = filePath;
+    self.as         = [];
+    self.requires   = [];
+    self.requiredBy = [];
+
+    self.process();
+};
+
+
+var isExportWrapped = function(content) {
+
+    var tree    = parser.parse(content),
+        body    = tree.body,
+        stmt,
+        left;
+
+    while (stmt = body.pop()) {
+
+        if (stmt.type != "ExpressionStatement") {
+            continue;
+        }
+        if (stmt.expression.type != "AssignmentExpression") {
+            continue;
+        }
+
+        left = stmt.expression.left;
+
+        if (!left.object) {
+            continue;
+        }
+
+        if (left.object.name != "module" || left.property.name != "exports") {
+            continue;
+        }
+
+        return false;
     }
 
-    return {
-        requires: requires,
-        content: content
-    };
+    return true;
 };
+
+File.prototype = {
+
+    base: null,
+    path: null,
+    content: "",
+    as: null,
+    requires: null,
+    requiredBy: null,
+    processed: false,
+
+    getContent: function() {
+
+        var self        = this,
+            content     = self.content,
+            wrappedExp  = false,
+            as          = self.as,
+            inx,
+            match,
+            name,
+            names;
+
+        if (content.indexOf("module.exports") != -1) {
+
+            wrappedExp  = isExportWrapped(content);
+            match       = /module\.exports\s*=\s*([^;]+);/.exec(content);
+            name        = match[1];
+
+            if (name.match(/[{(\['"+.]/)) {
+                name    = null;
+            }
+
+            if (wrappedExp && as.indexOf(name) != -1) {
+                throw "Cannot assign wrapped module.exports to a variable " + name + " in " + self.path;
+            }
+
+            if (!wrappedExp && (inx = as.indexOf(name)) != -1) {
+                as.splice(inx, 1);
+            }
+
+            if (name && as.length == 0) {
+                content = content.replace(/module\.exports\s*=\s*[^;]+;/, "");
+            }
+            else {
+
+                if (as.length == 0 && self.requiredBy.length > 0) {
+                    throw "No export names found for " + self.path + "; required by: " + self.requiredBy.join(", ");
+                }
+
+
+                if (wrappedExp || as.length > 1) {
+                    content = "var " + as.join(", ") + ";\n" + content;
+                    content = content.replace("module.exports", as.join(" = "));
+                }
+                else {
+                    if (as.length == 0) {
+                        as.push(path.basename(self.path, '.js'));
+                    }
+                    content = content.replace("module.exports", "var " + as[0]);
+                }
+            }
+
+            content = content.replace(rStrict, "");
+        }
+
+        return content;
+    },
+
+    process:function() {
+
+        var self        = this,
+            content     = fs.readFileSync(self.path).toString(),
+            base        = self.base,
+            required,
+            matches;
+
+        if (self.processed) {
+            return;
+        }
+
+        while (matches = rRequires.exec(content)) {
+            content     = content.replace(matches[0], "");
+            required    = path.normalize(base + matches[2]);
+
+            if (!isFile(required)) {
+                throw required + " required in " + self.path + " does not exist";
+            }
+
+            required    = getOrCreate(required);
+            required.addAs(matches[1]);
+
+            if (required.doesRequire(self.path)) {
+                throw "Two files require each other: " + required.path + " <-> " + self.path;
+            }
+
+            self.addRequired(required.path);
+            required.addRequiredBy(self.path);
+        }
+
+        content = content.replace(rEmptyVar, "");
+
+        while (matches = rInclude.exec(content)) {
+            content     = content.replace(matches[1], "");
+            required    = path.normalize(base + matches[2]);
+
+            if (!isFile(required)) {
+                throw required + " required in " + self.path + " does not exist";
+            }
+
+            required    = getOrCreate(required);
+
+            if (required.doesRequire(self.path)) {
+                throw "Two files require each other: " + required.path + " <-> " + self.path;
+            }
+
+            self.addRequired(required.path);
+            required.addRequiredBy(self.path);
+        }
+
+
+        self.content    = content;
+        self.processed  = true;
+    },
+
+    doesRequire: function(file) {
+        return this.requires.indexOf(file) != -1;
+    },
+
+    addRequired: function(file) {
+        var self = this;
+
+        if (self.requires.indexOf(file) == -1) {
+            self.requires.push(file);
+        }
+    },
+
+    addRequiredBy: function(file) {
+        this.requiredBy.push(file);
+    },
+
+    addAs: function(as) {
+        var self = this;
+
+        if (self.as.indexOf(as) == -1) {
+            self.as.push(as);
+        }
+    }
+
+};
+
+
 
 var resolveFileList = function(base, filename) {
 
@@ -96,51 +253,6 @@ var resolveFileList = function(base, filename) {
     return files;
 };
 
-var resolveFile = function(filePath, action) {
-
-    if (!allFiles[filePath]) {
-        allFiles[filePath] = {
-            path: filePath,
-            content: ""
-        };
-
-        try {
-
-            var content     = fs.readFileSync(filePath).toString(),
-                data        = readRequires(filePath, content, action),
-                requires    = [];
-
-        }
-        catch (e) {
-            console.log("Error reading file: " + filePath);
-            throw e;
-        }
-
-        data.requires.forEach(function(requiredFile){
-            var fileList = resolveFileList("", requiredFile);
-
-            fileList.forEach(function(requiredFile){
-                if (!isFile(requiredFile)) {
-                    throw requiredFile + " required in " + filePath + " does not exist";
-                }
-                requires.push(requiredFile);
-            });
-        });
-
-        allFiles[filePath].requires = requires;
-        allFiles[filePath].content = data.content;
-
-        requires.forEach(function(requiredFile){
-            resolveFile(requiredFile);
-
-            if (allFiles[requiredFile].requires.indexOf(filePath) != -1) {
-                throw "Two files require each other: " + filePath + " <-> " + requiredFile;
-            }
-        });
-    }
-
-    return allFiles[filePath];
-};
 
 
 
@@ -210,14 +322,6 @@ Builder.prototype   = {
     base:           null,
     onFinishCompiling: null,
 
-    resolveFiles:   function() {
-
-        var self    = this;
-        self.files.forEach(function(filePath){
-            resolveFile(filePath, self.action);
-        });
-    },
-
     build:          function() {
 
         var self    = this;
@@ -234,6 +338,10 @@ Builder.prototype   = {
         if (self.manifest.compile) {
             self.compile();
         }
+    },
+
+    resolveFiles:   function() {
+        this.files.forEach(getOrCreate);
     },
 
     prepareBuildList: function() {
@@ -294,8 +402,16 @@ Builder.prototype   = {
                 throw filePath + " was not resolved";
             }
 
-            content += allFiles[filePath].content;
+            content += allFiles[filePath].getContent();
         });
+
+        if (manifest.expose) {
+            content += "\n";
+
+            manifest.expose.forEach(function(varName){
+                content += "MetaphorJs." + varName + " = " + varName + ";\n";
+            });
+        }
 
         if (manifest.append) {
             manifest.append.forEach(function(file) {
@@ -304,8 +420,13 @@ Builder.prototype   = {
             });
         }
 
+        if (manifest.global) {
+            content += "\ntypeof global != \"undefined\" ? " +
+                       "(global.MetaphorJs = MetaphorJs) : (window.MetaphorJs = MetaphorJs);\n";
+        }
+
         if (manifest.wrap) {
-            var wrapStart   = manifest.wrapStart || "(function(){\n\"use strict\"\n";
+            var wrapStart   = manifest.wrapStart || "(function(){\n\"use strict\";\n";
             var wrapEnd     = manifest.wrapEnd || "\n}());";
             content         = wrapStart + content + wrapEnd;
         }
@@ -398,7 +519,8 @@ Builder.prototype   = {
             proc,
             srcMf       = new Builder(self.manifestFile, action),
             src         = path.normalize(self.base + srcMf.manifest.target),
-            out;
+            out,
+            args        = [];
 
         srcMf.build();
 
@@ -408,7 +530,13 @@ Builder.prototype   = {
 
         console.log("Compiling " + src);
         out     = fs.createWriteStream(target);
-        proc    = child.spawn("ccjs", [src]);
+        args.push(src);
+
+        if (manifest.compileAdvanced) {
+            args.push('--compilation_level=ADVANCED');
+        }
+
+        proc    = child.spawn("ccjs", args);
 
         proc.stderr.pipe(process.stderr);
         proc.stdout.pipe(out);
