@@ -87,7 +87,7 @@ File.prototype = {
     requiredBy: null,
     processed: false,
 
-    getContent: function() {
+    getContent: function(options) {
 
         var self        = this,
             content     = self.content,
@@ -95,46 +95,55 @@ File.prototype = {
             as          = self.as,
             inx,
             match,
-            name,
-            names;
+            name;
 
-        if (content.indexOf("module.exports") != -1) {
+        options = options || {};
 
-            wrappedExp  = isExportWrapped(content);
-            match       = /module\.exports\s*=\s*([^;]+);/.exec(content);
-            name        = match[1];
+        if (!options.keepExports && content.indexOf("module.exports") != -1) {
 
-            if (name.match(/[{(\['"+.]/)) {
-                name    = null;
-            }
+            if (options.returnExports) {
 
-            if (wrappedExp && as.indexOf(name) != -1) {
-                throw "Cannot assign wrapped module.exports to a variable " + name + " in " + self.path;
-            }
+                content     = content.replace(/module\.exports\s*=/, "return");
 
-            if (!wrappedExp && (inx = as.indexOf(name)) != -1) {
-                as.splice(inx, 1);
-            }
-
-            if (name && as.length == 0) {
-                content = content.replace(/module\.exports\s*=\s*[^;]+;/, "");
             }
             else {
 
-                if (as.length == 0 && self.requiredBy.length > 0) {
-                    throw "No export names found for " + self.path + "; required by: " + self.requiredBy.join(", ");
+                wrappedExp  = isExportWrapped(content);
+                match       = /module\.exports\s*=\s*([^;]+);/.exec(content);
+                name        = match[1];
+
+                if (name.match(/[{(\['"+.]/)) {
+                    name    = null;
                 }
 
+                if (wrappedExp && as.indexOf(name) != -1) {
+                    throw "Cannot assign wrapped module.exports to a variable " + name + " in " + self.path;
+                }
 
-                if (wrappedExp || as.length > 1) {
-                    content = "var " + as.join(", ") + ";\n" + content;
-                    content = content.replace("module.exports", as.join(" = "));
+                if (!wrappedExp && (inx = as.indexOf(name)) != -1) {
+                    as.splice(inx, 1);
+                }
+
+                if (name && as.length == 0) {
+                    content = content.replace(/module\.exports\s*=\s*[^;]+;/, "");
                 }
                 else {
+
                     if (as.length == 0) {
-                        as.push(path.basename(self.path, '.js'));
+                        content = content.replace(/module\.exports\s*=/, "");
+                        //throw "No export names found for " + self.path + "; required by: " + self.requiredBy.join(", ");
                     }
-                    content = content.replace("module.exports", "var " + as[0]);
+                    else {
+
+                        if (wrappedExp || as.length > 1) {
+                            content = "var " + as.join(", ") + ";\n" + content;
+                            content = content.replace("module.exports", as.join(" = "));
+                        }
+                        else {
+
+                            content = content.replace("module.exports", "var " + as[0]);
+                        }
+                    }
                 }
             }
 
@@ -263,6 +272,8 @@ var Builder         = function(manifestFile, action, onFinishCompiling) {
     self.buildList      = [];
     self.included       = {};
     self.files          = [];
+    self.fileOptions    = {};
+    self.omit           = [];
     self.manifestFile   = manifestFile;
     self.onFinishCompiling  = onFinishCompiling;
 
@@ -282,13 +293,19 @@ var Builder         = function(manifestFile, action, onFinishCompiling) {
     self.base       = root;
     self.manifest   = manifest;
 
-    if (manifest.after) {
-        var after = new Builder(manifestFile, manifest.after);
-        after.build();
-    }
 
     if (manifest.files) {
+
+        var fileOptions;
+
         manifest.files.forEach(function(filename){
+
+            fileOptions = null;
+
+            if (typeof filename != "string") {
+                fileOptions = filename[1];
+                filename    = filename[0];
+            }
 
             var fileList = resolveFileList(root, filename);
 
@@ -298,7 +315,14 @@ var Builder         = function(manifestFile, action, onFinishCompiling) {
                 }
 
                 files.push(filePath);
+                self.fileOptions[filePath] = fileOptions;
             });
+        });
+    }
+
+    if (manifest.omit) {
+        manifest.omit.forEach(function(omitPath){
+            self.omit.push(path.normalize(root + omitPath));
         });
     }
 
@@ -308,6 +332,16 @@ var Builder         = function(manifestFile, action, onFinishCompiling) {
     if (manifest.prependFilesFrom) {
         self.importManifests(manifest.prependFilesFrom, "prepend");
     }
+
+    files = self.files;
+
+    self.omit.forEach(function(omitPath){
+        var inx;
+        if ((inx = files.indexOf(omitPath)) != -1) {
+            files.splice(inx, 1);
+        }
+    });
+
 };
 
 Builder.prototype   = {
@@ -321,6 +355,8 @@ Builder.prototype   = {
     files:          null,
     base:           null,
     onFinishCompiling: null,
+    fileOptions:    null,
+    omit:           null,
 
     build:          function() {
 
@@ -341,14 +377,26 @@ Builder.prototype   = {
     },
 
     resolveFiles:   function() {
-        this.files.forEach(getOrCreate);
+        var self = this,
+            opt,
+            file;
+
+        self.files.forEach(function(filePath){
+            file = getOrCreate(filePath);
+
+            if ((opt = self.fileOptions[filePath]) && opt.as) {
+                file.addAs(opt.as);
+            }
+        });
     },
 
     prepareBuildList: function() {
 
-        var buildList   = [],
+        var self        = this,
+            buildList   = [],
             included    = {},
-            stack       = [];
+            stack       = [],
+            omit        = self.omit;
 
         var processFile = function(file) {
 
@@ -360,7 +408,9 @@ Builder.prototype   = {
             }
 
             file.requires.forEach(function(requiredFile){
-                processFile(allFiles[requiredFile]);
+                if (omit.indexOf(requiredFile) == -1) {
+                    processFile(allFiles[requiredFile]);
+                }
             });
 
             if (!included[file.path]) {
@@ -389,6 +439,14 @@ Builder.prototype   = {
             fs.unlinkSync(target);
         }
 
+        if (manifest.require) {
+            var rs = manifest.require,
+                module;
+            for (module in rs) {
+                content += "var " + rs[module] + " = require('"+module+"');\n"
+            }
+        }
+
         if (manifest.prepend) {
             manifest.prepend.forEach(function(file) {
                 var filePath = path.normalize(self.base + file);
@@ -402,14 +460,30 @@ Builder.prototype   = {
                 throw filePath + " was not resolved";
             }
 
-            content += allFiles[filePath].getContent();
+            content += allFiles[filePath].getContent(self.fileOptions[filePath]);
         });
 
         if (manifest.expose) {
             content += "\n";
 
+            var createdNs = {
+                "MetaphorJs.lib": true
+            };
+
             manifest.expose.forEach(function(varName){
-                content += "MetaphorJs." + varName + " = " + varName + ";\n";
+
+                if (typeof varName == "string") {
+                    content += "MetaphorJs['" + varName + "'] = " + varName + ";\n";
+                }
+                else {
+                    var ns = varName[0];
+                    varName = varName[1];
+
+                    if (!createdNs[ns]) {
+                        content += ns + " || (" + ns + " = {});\n";
+                    }
+                    content += ns + "['"+varName+"'] = " + varName + ";\n";
+                }
             });
         }
 
@@ -422,7 +496,40 @@ Builder.prototype   = {
 
         if (manifest.global) {
             content += "\ntypeof global != \"undefined\" ? " +
-                       "(global.MetaphorJs = MetaphorJs) : (window.MetaphorJs = MetaphorJs);\n";
+                       "(global['MetaphorJs'] = MetaphorJs) : (window['MetaphorJs'] = MetaphorJs);\n";
+        }
+
+        if (manifest.exports) {
+            content += "\nmodule.exports = " + manifest.exports + ";\n";
+        }
+
+        if (manifest.define) {
+            var defName = manifest.define.name,
+                defDeps = manifest.define.deps,
+                defRet  = manifest.define.return,
+                start   = 'define("'+defName+'", ',
+                end     = "\n});\n",
+                deps    = [],
+                args    = [],
+                dep;
+
+            if (defDeps) {
+                for (dep in defDeps) {
+                    deps.push("'" + dep + "'");
+                    args.push(defDeps[dep]);
+                }
+                start   += '[' + deps.join(", ") + '], ';
+                start   += 'function(' + args.join(", ") + ') {' + "\n";
+            }
+            else {
+                start += "function() {\n";
+            }
+
+            if (defRet) {
+                end     = "\nreturn " + defRet + ";" + end;
+            }
+
+            content = start + content + end;
         }
 
         if (manifest.wrap) {
@@ -487,6 +594,12 @@ Builder.prototype   = {
             curFiles    = self.files,
             result;
 
+        importFiles.forEach(function(filePath){
+            if (b.fileOptions[filePath] && !self.fileOptions[filePath]) {
+                self.fileOptions[filePath] = b.fileOptions[filePath];
+            }
+        });
+
         if (mode == "append") {
 
             result      = curFiles.slice();
@@ -536,6 +649,10 @@ Builder.prototype   = {
             args.push('--compilation_level=ADVANCED');
         }
 
+        if (manifest.compileSourceMap) {
+            args.push("--create_source_map=" + target + ".map");
+        }
+
         proc    = child.spawn("ccjs", args);
 
         proc.stderr.pipe(process.stderr);
@@ -561,20 +678,22 @@ var eachManifest = function(fn) {
     var cwd     = process.cwd(),
         dirs    = fs.readdirSync(cwd),
         mf,
-        i, m;
+        i, m,
+        eachDir = function(dir){
+            dir     = cwd + "/" + dir;
+            mf      = dir + "/metaphorjs.json";
 
-    dirs.forEach(function(dir){
-        dir     = cwd + "/" + dir;
-        mf      = dir + "/metaphorjs.json";
+            if (isDir(dir) && isFile(mf)) {
+                m   = require(mf);
 
-        if (isDir(dir) && isFile(mf)) {
-            m   = require(mf);
-
-            for (i in m) {
-                fn(m[i], mf, i);
+                for (i in m) {
+                    fn(m[i], mf, i);
+                }
             }
-        }
-    });
+        };
+
+    eachDir(cwd);
+    dirs.forEach(eachDir);
 };
 
 
@@ -610,7 +729,7 @@ module.exports = {
         var b;
 
         eachManifest(function(m, manifestFile, action){
-            if (m.auto) {
+            if (!m.compile) {
                 b = new Builder(manifestFile, action);
                 b.build();
             }
