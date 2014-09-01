@@ -1,344 +1,66 @@
 
-var path            = require("path"),
-    fs              = require("fs"),
+var fs              = require("fs"),
     child           = require("child_process"),
-    parser          = require("esprima"),
-    allFiles        = {},
-
-    rStrict         = /'use strict'|"use strict";?/g,
-    rRequires       = /([^\s]+)\s*=\s*require\(['|"]([^)]+)['|"]\)/,
-    rInclude        = /[^=\s]?\s*(require\(['|"]([^)]+)['|"]\);?)/,
-    rEmptyVar       = /var[\s|,]*;/g,
-
-
-
-    isFile          = function(filePath) {
-        return fs.existsSync(filePath) && fs.lstatSync(filePath).isFile();
-    },
-
-    isDir           = function(dirPath) {
-        return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
-    },
-
-    getOrCreate     = function(file) {
-
-        if (!allFiles[file]) {
-            allFiles[file] = new File(file);
-        }
-
-        return allFiles[file];
-    };
+    path            = require("path"),
+    File            = require("./File.js"),
+    getOrCreate     = File.getOrCreate,
+    isFile          = require("../lib/isFile.js"),
+    isDir           = require("../lib/isDir.js"),
+    flattenFileList = require("./flattenFileList.js"),
+    eachProject     = require("../lib/eachProject.js"),
+    Promise         = require("../../metaphorjs-promise/src/metaphorjs.promise.js");
 
 
 
-var File = function(filePath) {
+var Builder         = function(action, projectFile) {
 
-    var self    = this;
-
-    self.base       = path.dirname(filePath) + "/";
-    self.path       = filePath;
-    self.as         = [];
-    self.requires   = [];
-    self.requiredBy = [];
-
-    self.process();
-};
-
-
-var isExportWrapped = function(content) {
-
-    var tree    = parser.parse(content),
-        body    = tree.body,
-        stmt,
-        left;
-
-    while (stmt = body.pop()) {
-
-        if (stmt.type != "ExpressionStatement") {
-            continue;
-        }
-        if (stmt.expression.type != "AssignmentExpression") {
-            continue;
-        }
-
-        left = stmt.expression.left;
-
-        if (!left.object) {
-            continue;
-        }
-
-        if (left.object.name != "module" || left.property.name != "exports") {
-            continue;
-        }
-
-        return false;
+    if (!isFile(projectFile)) {
+        throw projectFile + " not found";
     }
 
-    return true;
-};
-
-File.prototype = {
-
-    base: null,
-    path: null,
-    content: "",
-    as: null,
-    requires: null,
-    requiredBy: null,
-    processed: false,
-
-    getContent: function(options) {
-
-        var self        = this,
-            content     = self.content,
-            wrappedExp  = false,
-            as          = self.as,
-            inx,
-            match,
-            name;
-
-        options = options || {};
-
-        if (!options.keepExports && content.indexOf("module.exports") != -1) {
-
-            if (options.returnExports) {
-
-                content     = content.replace(/module\.exports\s*=/, "return");
-
-            }
-            else {
-
-                wrappedExp  = isExportWrapped(content);
-                match       = /module\.exports\s*=\s*([^;]+);/.exec(content);
-                name        = match[1];
-
-                if (name.match(/[{(\['"+.]/)) {
-                    name    = null;
-                }
-
-                if (wrappedExp && as.indexOf(name) != -1) {
-                    throw "Cannot assign wrapped module.exports to a variable " + name + " in " + self.path;
-                }
-
-                if (!wrappedExp && (inx = as.indexOf(name)) != -1) {
-                    as.splice(inx, 1);
-                }
-
-                if (name && as.length == 0) {
-                    content = content.replace(/module\.exports\s*=\s*[^;]+;/, "");
-                }
-                else {
-
-                    if (as.length == 0) {
-                        content = content.replace(/module\.exports\s*=/, "");
-                        //throw "No export names found for " + self.path + "; required by: " + self.requiredBy.join(", ");
-                    }
-                    else {
-
-                        if (wrappedExp || as.length > 1) {
-                            content = "var " + as.join(", ") + ";\n" + content;
-                            content = content.replace("module.exports", as.join(" = "));
-                        }
-                        else {
-
-                            content = content.replace("module.exports", "var " + as[0]);
-                        }
-                    }
-                }
-            }
-
-            content = content.replace(rStrict, "");
-        }
-
-        return content;
-    },
-
-    process:function() {
-
-        var self        = this,
-            content     = fs.readFileSync(self.path).toString(),
-            base        = self.base,
-            required,
-            matches;
-
-        if (self.processed) {
-            return;
-        }
-
-        while (matches = rRequires.exec(content)) {
-            content     = content.replace(matches[0], "");
-            required    = path.normalize(base + matches[2]);
-
-            if (!isFile(required)) {
-                throw required + " required in " + self.path + " does not exist";
-            }
-
-            required    = getOrCreate(required);
-            required.addAs(matches[1]);
-
-            if (required.doesRequire(self.path)) {
-                throw "Two files require each other: " + required.path + " <-> " + self.path;
-            }
-
-            self.addRequired(required.path);
-            required.addRequiredBy(self.path);
-        }
-
-        content = content.replace(rEmptyVar, "");
-
-        while (matches = rInclude.exec(content)) {
-            content     = content.replace(matches[1], "");
-            required    = path.normalize(base + matches[2]);
-
-            if (!isFile(required)) {
-                throw required + " required in " + self.path + " does not exist";
-            }
-
-            required    = getOrCreate(required);
-
-            if (required.doesRequire(self.path)) {
-                throw "Two files require each other: " + required.path + " <-> " + self.path;
-            }
-
-            self.addRequired(required.path);
-            required.addRequiredBy(self.path);
-        }
-
-
-        self.content    = content;
-        self.processed  = true;
-    },
-
-    doesRequire: function(file) {
-        return this.requires.indexOf(file) != -1;
-    },
-
-    addRequired: function(file) {
-        var self = this;
-
-        if (self.requires.indexOf(file) == -1) {
-            self.requires.push(file);
-        }
-    },
-
-    addRequiredBy: function(file) {
-        this.requiredBy.push(file);
-    },
-
-    addAs: function(as) {
-        var self = this;
-
-        if (self.as.indexOf(as) == -1) {
-            self.as.push(as);
-        }
-    }
-
-};
-
-
-
-var resolveFileList = function(base, filename) {
-
-    var fileList,
-        dir,
-        filePath,
-        files = [];
-
-    if (filename.substr(filename.length - 1) == "*") {
-        dir         = path.normalize(base + filename.substr(0, filename.length - 2));
-        fileList    = fs.readdirSync(dir);
-
-        fileList.forEach(function(filename) {
-            filePath = path.normalize(dir + "/" + filename);
-            if (isFile(filePath)) {
-                files.push(filePath);
-            }
-        });
-    }
-    else {
-        files    = [path.normalize(base + filename)];
-    }
-
-    return files;
-};
-
-
-
-
-var Builder         = function(manifestFile, action, onFinishCompiling) {
-
-    var self        = this;
+    var self            = this;
 
     self.buildList      = [];
     self.included       = {};
     self.files          = [];
     self.fileOptions    = {};
     self.omit           = [];
-    self.manifestFile   = manifestFile;
-    self.onFinishCompiling  = onFinishCompiling;
+    self.projectFile   = projectFile;
+    self.allActions     = require(projectFile).build;
+    self.action         = action;
 
-    if (!isFile(manifestFile)) {
-        throw manifestFile + " not found";
+    var base        = self.base = path.dirname(projectFile) + "/",
+        project    = self.project = self.allActions[action];
+
+    if (project.files) {
+
+        var result = flattenFileList(base, project.files, projectFile);
+
+        self.files  = self.files.concat(result.list);
+
+        for (var i in result.options) {
+            self.fileOptions[i] = result.options[i];
+        }
     }
 
-    var manifest    = require(manifestFile),
-        root        = path.dirname(manifestFile) + "/",
-        files       = self.files;
-
-    self.allActions = manifest;
-
-    manifest        = manifest[action];
-
-    self.action     = action;
-    self.base       = root;
-    self.manifest   = manifest;
-
-
-    if (manifest.files) {
-
-        var fileOptions;
-
-        manifest.files.forEach(function(filename){
-
-            fileOptions = null;
-
-            if (typeof filename != "string") {
-                fileOptions = filename[1];
-                filename    = filename[0];
-            }
-
-            var fileList = resolveFileList(root, filename);
-
-            fileList.forEach(function(filePath) {
-                if (!isFile(filePath)) {
-                    throw filePath + " defined in manifest " + manifestFile + " does not exist";
-                }
-
-                files.push(filePath);
-                self.fileOptions[filePath] = fileOptions;
-            });
+    if (project.omit) {
+        project.omit.forEach(function(omitPath){
+            self.omit.push(path.normalize(base + omitPath));
         });
     }
 
-    if (manifest.omit) {
-        manifest.omit.forEach(function(omitPath){
-            self.omit.push(path.normalize(root + omitPath));
-        });
+    if (project.appendFilesFrom) {
+        self.importprojects(project.appendFilesFrom, "append");
+    }
+    if (project.prependFilesFrom) {
+        self.importprojects(project.prependFilesFrom, "prepend");
     }
 
-    if (manifest.appendFilesFrom) {
-        self.importManifests(manifest.appendFilesFrom, "append");
-    }
-    if (manifest.prependFilesFrom) {
-        self.importManifests(manifest.prependFilesFrom, "prepend");
-    }
-
-    files = self.files;
 
     self.omit.forEach(function(omitPath){
         var inx;
-        if ((inx = files.indexOf(omitPath)) != -1) {
-            files.splice(inx, 1);
+        if ((inx = self.files.indexOf(omitPath)) != -1) {
+            self.files.splice(inx, 1);
         }
     });
 
@@ -346,15 +68,14 @@ var Builder         = function(manifestFile, action, onFinishCompiling) {
 
 Builder.prototype   = {
 
-    manifestFile:   null,
+    projectFile:   null,
     allActions:     null,
     action:         null,
-    manifest:       null,
+    project:       null,
     buildList:      null,
     included:       null,
     files:          null,
     base:           null,
-    onFinishCompiling: null,
     fileOptions:    null,
     omit:           null,
 
@@ -366,13 +87,9 @@ Builder.prototype   = {
             self.resolveFiles();
             self.prepareBuildList();
 
-            if (self.manifest.target) {
+            if (self.project.target) {
                 self.concat();
             }
-        }
-
-        if (self.manifest.compile) {
-            self.compile();
         }
     },
 
@@ -409,7 +126,7 @@ Builder.prototype   = {
 
             file.requires.forEach(function(requiredFile){
                 if (omit.indexOf(requiredFile) == -1) {
-                    processFile(allFiles[requiredFile]);
+                    processFile(File.get(requiredFile));
                 }
             });
 
@@ -422,7 +139,7 @@ Builder.prototype   = {
         };
 
         this.files.forEach(function(filePath){
-            processFile(allFiles[filePath]);
+            processFile(File.get(filePath));
         });
 
         this.buildList = buildList;
@@ -431,24 +148,26 @@ Builder.prototype   = {
     concat:        function() {
 
         var self        = this,
-            manifest    = self.manifest,
-            target      = path.normalize(self.base + manifest.target),
+            project    = self.project,
+            target      = path.normalize(self.base + project.target),
             content     = "";
+
+        console.log("Building " + path.basename(target));
 
         if (isFile(target)) {
             fs.unlinkSync(target);
         }
 
-        if (manifest.require) {
-            var rs = manifest.require,
+        if (project.require) {
+            var rs = project.require,
                 module;
             for (module in rs) {
                 content += "var " + rs[module] + " = require('"+module+"');\n"
             }
         }
 
-        if (manifest.prepend) {
-            manifest.prepend.forEach(function(file) {
+        if (project.prepend) {
+            project.prepend.forEach(function(file) {
                 var filePath = path.normalize(self.base + file);
                 content += fs.readFileSync(filePath).toString();
             });
@@ -456,21 +175,21 @@ Builder.prototype   = {
 
         self.buildList.forEach(function(filePath){
 
-            if (!allFiles[filePath]) {
+            if (!File.exists(filePath)) {
                 throw filePath + " was not resolved";
             }
 
-            content += allFiles[filePath].getContent(self.fileOptions[filePath]);
+            content += File.get(filePath).getContent(self.fileOptions[filePath]);
         });
 
-        if (manifest.expose) {
+        if (project.expose) {
             content += "\n";
 
             var createdNs = {
                 "MetaphorJs.lib": true
             };
 
-            manifest.expose.forEach(function(varName){
+            project.expose.forEach(function(varName){
 
                 if (typeof varName == "string") {
                     content += "MetaphorJs['" + varName + "'] = " + varName + ";\n";
@@ -487,26 +206,26 @@ Builder.prototype   = {
             });
         }
 
-        if (manifest.append) {
-            manifest.append.forEach(function(file) {
+        if (project.append) {
+            project.append.forEach(function(file) {
                 var filePath = path.normalize(self.base + file);
                 content += fs.readFileSync(filePath).toString();
             });
         }
 
-        if (manifest.global) {
+        if (project.global) {
             content += "\ntypeof global != \"undefined\" ? " +
                        "(global['MetaphorJs'] = MetaphorJs) : (window['MetaphorJs'] = MetaphorJs);\n";
         }
 
-        if (manifest.exports) {
-            content += "\nmodule.exports = " + manifest.exports + ";\n";
+        if (project.exports) {
+            content += "\nmodule.exports = " + project.exports + ";\n";
         }
 
-        if (manifest.define) {
-            var defName = manifest.define.name,
-                defDeps = manifest.define.deps,
-                defRet  = manifest.define.return,
+        if (project.define) {
+            var defName = project.define.name,
+                defDeps = project.define.deps,
+                defRet  = project.define.return,
                 start   = 'define("'+defName+'", ',
                 end     = "\n});\n",
                 deps    = [],
@@ -532,9 +251,9 @@ Builder.prototype   = {
             content = start + content + end;
         }
 
-        if (manifest.wrap) {
-            var wrapStart   = manifest.wrapStart || "(function(){\n\"use strict\";\n";
-            var wrapEnd     = manifest.wrapEnd || "\n}());";
+        if (project.wrap) {
+            var wrapStart   = project.wrapStart || "(function(){\n\"use strict\";\n";
+            var wrapEnd     = project.wrapEnd || "\n}());";
             content         = wrapStart + content + wrapEnd;
         }
 
@@ -546,50 +265,50 @@ Builder.prototype   = {
         return this.files;
     },
 
-    importManifests: function(list, mode) {
+    importprojects: function(list, mode) {
 
         var self    = this;
 
         if (typeof list == "string") {
             if (self.allActions[list]) {
-                self.importFilesFrom(self.manifestFile, list, mode);
+                self.importFilesFrom(self.projectFile, list, mode);
             }
         }
         else {
-            list.forEach(function(fromManifest){
+            list.forEach(function(fromproject){
 
-                var manifestFile,
+                var projectFile,
                     action;
 
-                if (typeof fromManifest == "string") {
-                    if (self.allActions[fromManifest]) {
-                        self.importFilesFrom(self.manifestFile, fromManifest, mode);
+                if (typeof fromproject == "string") {
+                    if (self.allActions[fromproject]) {
+                        self.importFilesFrom(self.projectFile, fromproject, mode);
                         return;
                     }
                     else {
-                        manifestFile    = fromManifest;
+                        projectFile    = fromproject;
                         action          = null;
                     }
                 }
                 else {
-                    manifestFile    = path.normalize(self.base + fromManifest[0]);
-                    action          = fromManifest[1];
+                    projectFile    = path.normalize(self.base + fromproject[0]);
+                    action          = fromproject[1];
                 }
 
-                if (!manifestFile) {
-                    console.log(fromManifest);
-                    throw "No manifest file";
+                if (!projectFile) {
+                    console.log(fromproject);
+                    throw "No project file";
                 }
 
-                self.importFilesFrom(manifestFile, action, mode);
+                self.importFilesFrom(projectFile, action, mode);
             });
         }
     },
 
-    importFilesFrom: function(manifestFile, action, mode) {
+    importFilesFrom: function(projectFile, action, mode) {
 
         var self        = this,
-            b           = new Builder(manifestFile, action),
+            b           = new Builder(action, projectFile),
             importFiles = b.getFiles(),
             curFiles    = self.files,
             result;
@@ -623,33 +342,29 @@ Builder.prototype   = {
         self.files      = result;
     },
 
-    compile:        function() {
+    compile:        function(onFinish) {
 
         var self        = this,
-            manifest    = self.manifest,
-            target      = path.normalize(self.base + manifest.target),
-            action      = manifest.compile,
+            project    = self.project,
+            source      = path.normalize(self.base + project.target),
+            target      = source.replace(/\.js$/, ".min.js"),
+            args        = [],
             proc,
-            srcMf       = new Builder(self.manifestFile, action),
-            src         = path.normalize(self.base + srcMf.manifest.target),
-            out,
-            args        = [];
-
-        srcMf.build();
+            out;
 
         if (isFile(target)) {
             fs.unlinkSync(target);
         }
 
-        console.log("Compiling " + src);
+        console.log("Compiling " + path.basename(target));
         out     = fs.createWriteStream(target);
-        args.push(src);
+        args.push(source);
 
-        if (manifest.compileAdvanced) {
+        if (project.compileAdvanced) {
             args.push('--compilation_level=ADVANCED');
         }
 
-        if (manifest.compileSourceMap) {
+        if (project.compileSourceMap) {
             args.push("--create_source_map=" + target + ".map");
         }
 
@@ -658,8 +373,8 @@ Builder.prototype   = {
         proc.stderr.pipe(process.stderr);
         proc.stdout.pipe(out);
         proc.on("exit", function(code) {
-            if (self.onFinishCompiling) {
-                self.onFinishCompiling(code);
+            if (onFinish) {
+                onFinish(code);
             }
             else {
                 process.exit(code);
@@ -673,97 +388,132 @@ Builder.prototype   = {
 
 
 
-var eachManifest = function(fn) {
+/**
+ * @param {function} fn
+ */
+var eachBuild = function(fn) {
 
-    var cwd     = process.cwd(),
-        dirs    = fs.readdirSync(cwd),
-        mf,
-        i, m,
-        eachDir = function(dir){
-            dir     = cwd + "/" + dir;
-            mf      = dir + "/metaphorjs.json";
+    eachProject(function(project, projectFile){
 
-            if (isDir(dir) && isFile(mf)) {
-                m   = require(mf);
+        var builds = project.build,
+            i;
 
-                for (i in m) {
-                    fn(m[i], mf, i);
-                }
+        if (builds) {
+            for (i in builds) {
+                fn(builds[i], projectFile, i);
             }
-        };
-
-    eachDir(cwd);
-    dirs.forEach(eachDir);
+        }
+    });
 };
 
 
-module.exports = {
-    build: function(action, manifestFile) {
+Builder.build = function(action, projectFile) {
 
-        if (!manifestFile) {
-            manifestFile = process.cwd() + "/metaphorjs.json";
-        }
+    if (!projectFile) {
+        projectFile = process.cwd() + "/metaphorjs.json";
+    }
 
-        var actions = [];
+    var actions = [];
 
-        if (!action) {
-            var manifest = require(manifestFile);
-            for (var i in manifest) {
-                if (manifest[i].auto) {
+    if (!action) {
+        var project    = require(projectFile),
+            builds      = project.build;
+
+        if (builds) {
+            for (var i in builds) {
+                if (builds[i].auto) {
                     actions.push(i);
                 }
             }
         }
-        else {
-            actions.push(action);
-        }
-
-        actions.forEach(function(action){
-            var builder     = new Builder(manifestFile, action);
-            builder.build();
-        });
-    },
-
-    buildAll: function() {
-
-        var b;
-
-        eachManifest(function(m, manifestFile, action){
-            if (!m.compile) {
-                b = new Builder(manifestFile, action);
-                b.build();
-            }
-        });
-    },
-
-    compileAll: function() {
-
-        var b,
-            mfs     = [],
-            next    = function(code) {
-
-                if (code != 0) {
-                    process.exit(code);
-                }
-
-                var item = mfs.shift();
-
-                if (!item) {
-                    process.exit(0);
-                }
-
-                b = new Builder(item[0], item[1], next);
-                b.build();
-            };
-
-        eachManifest(function(m, manifestFile, action){
-            if (m.compile) {
-                mfs.push([manifestFile, action]);
-            }
-        });
-
-        next(0);
+    }
+    else {
+        actions.push(action);
     }
 
+    actions.forEach(function(action){
+        var builder     = new Builder(action, projectFile);
+        builder.build();
+    });
+};
+
+Builder.compile = function(action, projectFile) {
+
+    if (!projectFile) {
+        projectFile = process.cwd() + "/metaphorjs.json";
+    }
+    if (!action) {
+        throw "Must specify build. Or use mjs-compile-all";
+    }
+
+    var deferred    = new Promise;
+
+    var builder     = new Builder(action, projectFile);
+    builder.build();
+    builder.compile(function(){
+        deferred.resolve();
+    });
+
+    return deferred;
+};
+
+Builder.buildAll = function(auto) {
+
+    var b;
+
+    eachBuild(function(build, projectFile, buildName){
+        if (!auto || build.auto) {
+            b = new Builder(buildName, projectFile);
+            b.build();
+        }
+    });
 
 };
+
+Builder.compileAll = function(noExit, noBuild) {
+
+    var b,
+        builds      = [],
+        deferred    = new Promise,
+        item,
+        next        = function(code) {
+
+            if (code != 0) {
+                deferred.reject(item[1] + " failed compiling with code " + code);
+                if (!noExit) {
+                    process.exit(code);
+                }
+                return;
+            }
+
+            item = builds.shift();
+
+            if (!item) {
+                deferred.resolve();
+                if (!noExit) {
+                    process.exit(0);
+                }
+                return;
+            }
+
+            b = new Builder(item[0], item[1]);
+            if (!noBuild) {
+                b.build();
+            }
+            b.compile(next);
+        };
+
+    eachBuild(function(project, projectFile, buildName){
+        if (project.compile !== false) {
+            builds.push([buildName, projectFile]);
+        }
+    });
+
+    next(0);
+
+    return deferred;
+};
+
+
+
+module.exports = Builder;

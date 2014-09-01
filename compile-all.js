@@ -1,3 +1,4 @@
-var builder = require("./builder/builder");
+#!/usr/bin/env node
 
-builder.compileAll();
+require("./builder/Builder.js")
+    .compileAll();
