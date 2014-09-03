@@ -209,7 +209,7 @@ Project.prototype = {
             })
             // publish npm
             .then(function(){
-                if (deferred.isPending() && self.hasNpm) {
+                if (deferred.isPending() && vMod && self.hasNpm) {
                     console.log("publishing npm");
                     return self.publishNpm().fail(onErr);
                 }
