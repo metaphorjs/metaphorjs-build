@@ -121,7 +121,7 @@ Project.prototype = {
 
                     if (options.compile !== false) {
                         process.chdir(self.location);
-                        //return Builder.compileAll(true, true).fail(onErr);
+                        return Builder.compileAll(true, true).fail(onErr);
                     }
                     else {
                         return true;
