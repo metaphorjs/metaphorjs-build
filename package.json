@@ -1,6 +1,6 @@
 {
     "name": "metaphorjs-build",
-    "version": "0.3.2",
+    "version": "0.3.3",
     "description": "MetaphorJs builder",
     "main": "builder/builder.js",
     "repository": {

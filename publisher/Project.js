@@ -1,6 +1,7 @@
 
 var path = require("path"),
     fs = require("fs"),
+    cp = require("child_process"),
     Promise = require("../../metaphorjs-promise/src/metaphorjs.promise.js"),
     Git = require("./Git.js"),
     isFile = require("../lib/isFile.js"),
@@ -46,19 +47,58 @@ Project.prototype = {
     test: function() {
 
         var self        = this,
-            test        = self.config.test;
+            test        = self.config.test,
+            tests       = [],
+            promise     = new Promise,
+
+            next        = function() {
+                var test = tests.shift();
+                if (test) {
+                    process.chdir(self.location);
+                    var service,
+                        wait = 0;
+
+                    if (test.service) {
+                        service = cp.spawn(test.service.cmd, test.service.args || []);
+                        wait = test.service.wait || 0;
+                    }
+
+                    var runTest = function() {
+                        passthru(test.cmd, test.args || []).then(function(){
+
+                            if (test.service) {
+                                service.kill("SIGHUP");
+                            }
+
+                            next();
+                        });
+                    };
+
+                    setTimeout(runTest, wait);
+                }
+                else {
+                    promise.resolve();
+                }
+            };
 
         if (test) {
 
             console.log("Testing " + path.basename(self.location));
 
-            process.chdir(self.location);
+            if (test.cmd) {
+                tests = [test];
+            }
+            else {
+                tests = test;
+            }
 
-            return passthru(test.cmd, test.args || []);
+            next();
         }
         else {
-            return Promise.resolve();
+            promise.resolve();
         }
+
+        return promise;
     },
 
     /**
