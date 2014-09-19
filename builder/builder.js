@@ -186,24 +186,37 @@ Builder.prototype   = {
             content += "\n";
 
             var createdNs = {
-                "MetaphorJs.lib": true
+                "MetaphorJs.lib": true,
+                "MetaphorJs.view": true,
+                "MetaphorJs.cmp": true
             };
 
-            project.expose.forEach(function(varName){
-
-                if (typeof varName == "string") {
-                    content += "MetaphorJs['" + varName + "'] = " + varName + ";\n";
-                }
-                else {
-                    var ns = varName[0];
-                    varName = varName[1];
-
-                    if (!createdNs[ns]) {
-                        content += ns + " || (" + ns + " = {});\n";
+            if (project.expose == "all") {
+                var names = self.collectNames();
+                names.forEach(function(name){
+                    if (name != "MetaphorJs") {
+                        content += "MetaphorJs['" + name + "'] = " + name + ";\n";
                     }
-                    content += ns + "['"+varName+"'] = " + varName + ";\n";
-                }
-            });
+                });
+            }
+            else {
+
+                project.expose.forEach(function (varName) {
+
+                    if (typeof varName == "string") {
+                        content += "MetaphorJs['" + varName + "'] = " + varName + ";\n";
+                    }
+                    else {
+                        var ns = varName[0];
+                        varName = varName[1];
+
+                        if (!createdNs[ns]) {
+                            content += ns + " || (" + ns + " = {});\n";
+                        }
+                        content += ns + "['" + varName + "'] = " + varName + ";\n";
+                    }
+                });
+            }
         }
 
         if (project.append) {
@@ -360,6 +373,8 @@ Builder.prototype   = {
         out     = fs.createWriteStream(target);
         args.push(source);
 
+        args.push('--language_in=ECMASCRIPT5_STRICT');
+
         if (project.compileAdvanced) {
             args.push('--compilation_level=ADVANCED');
         }
@@ -383,6 +398,29 @@ Builder.prototype   = {
         proc.on("error", function(error) {
             console.log(error);
         });
+    },
+
+    collectNames: function() {
+
+        var self    = this,
+            bl      = self.buildList,
+            names   = [],
+            uni     = {};
+
+        bl.forEach(function(path) {
+            var file = getOrCreate(path),
+                as  = file.as;
+
+            as.forEach(function(name) {
+                if (!uni[name]) {
+                    uni[name] = true;
+                    names.push(name);
+                }
+            });
+        });
+
+        return names;
+
     }
 };
 

@@ -54,10 +54,10 @@ File.prototype = {
 
         var self        = this,
             content     = self.content,
-            as          = self.as,
+            as          = self.as.slice(),
             inx,
             match,
-            name;
+            name, funcName;
 
         options = options || {};
 
@@ -70,14 +70,13 @@ File.prototype = {
             }
             else {
 
-                match       = /module\.exports\s*=\s*([^;]+);/.exec(content);
-                name        = match[1];
+                match       = /module\.exports\s*=\s*([^(\['"+. ]+)\s*;/.exec(content);
+                name        = match ? match[1] : null;
 
-                if (name.match(/[{(\['"+.]/)) {
-                    name    = null;
-                }
+                match       = /module\.exports\s*=\s*function\s+([^( ]+)/i.exec(content);
+                funcName    = match ? match[1] : null;
 
-                if ((inx = as.indexOf(name)) != -1) {
+                if (name && (inx = as.indexOf(name)) != -1) {
                     as.splice(inx, 1);
                 }
 
@@ -86,8 +85,8 @@ File.prototype = {
                 }
                 else {
 
-                    if (as.length == 0) {
-                        content = content.replace(/module\.exports\s*=/, "");
+                    if (as.length == 0 || (funcName && as.length == 1 && as[0] == funcName)) {
+                        content = content.replace(/module\.exports\s*=\s*/, "");
                         //throw "No export names found for " + self.path + "; required by: " + self.requiredBy.join(", ");
                     }
                     else {
