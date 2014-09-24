@@ -33,7 +33,10 @@ var File = function(filePath) {
     self.requires   = [];
     self.requiredBy = [];
 
+    self.reqNames   = {};
+
     self.process();
+    self.findUnused();
 };
 
 File.prototype = {
@@ -45,6 +48,7 @@ File.prototype = {
     requires: null,
     requiredBy: null,
     processed: false,
+    reqNames: null,
 
     /**
      * @param {Object} options
@@ -129,6 +133,8 @@ File.prototype = {
                 throw required + " required in " + self.path + " does not exist";
             }
 
+            self.reqNames[matches[1]] = required;
+
             required    = getOrCreate(required);
             required.addAs(matches[1]);
 
@@ -184,8 +190,28 @@ File.prototype = {
     addAs: function(as) {
         var self = this;
 
+        if (as == "*") {
+            as = path.basename(self.path, ".js");
+        }
+
         if (self.as.indexOf(as) == -1) {
             self.as.push(as);
+        }
+    },
+
+    findUnused: function() {
+        var self        = this,
+            content     = self.content,
+            name,
+            reg;
+
+        for (name in self.reqNames) {
+
+            reg = new RegExp('[^a-zA-Z0-9]'+name+'[^a-zA-Z0-9]');
+
+            if (!content.match(reg)) {
+                console.log("Unused requirement " + name + " in " + self.path);
+            }
         }
     }
 };

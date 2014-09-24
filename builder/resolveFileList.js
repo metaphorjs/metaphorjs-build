@@ -24,7 +24,7 @@ module.exports = function(base, filename) {
 
         fileList.forEach(function(filename) {
             filePath = path.normalize(dir + "/" + filename);
-            if (isFile(filePath)) {
+            if (isFile(filePath) && path.extname(filePath) == ".js") {
                 files.push(filePath);
             }
             else if (isDir(filePath) && levels > 1) {

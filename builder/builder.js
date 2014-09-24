@@ -6,9 +6,10 @@ var fs              = require("fs"),
     getOrCreate     = File.getOrCreate,
     isFile          = require("../lib/isFile.js"),
     isDir           = require("../lib/isDir.js"),
-    flattenFileList = require("./flattenFileList.js"),
     eachProject     = require("../lib/eachProject.js"),
-    Promise         = require("../../metaphorjs-promise/src/metaphorjs.promise.js");
+    Promise         = require("../../metaphorjs-promise/src/metaphorjs.promise.js"),
+    Build           = require("./Build.js"),
+    JsonFile        = require("../lib/JsonFile.js");
 
 
 
@@ -20,136 +21,40 @@ var Builder         = function(action, projectFile) {
 
     var self            = this;
 
-    self.buildList      = [];
-    self.included       = {};
-    self.files          = [];
-    self.fileOptions    = {};
-    self.omit           = [];
-    self.projectFile   = projectFile;
-    self.allActions     = require(projectFile).build;
-    self.action         = action;
-
-    var base        = self.base = path.dirname(projectFile) + "/",
-        project    = self.project = self.allActions[action];
-
-    if (project.files) {
-
-        var result = flattenFileList(base, project.files, projectFile);
-
-        self.files  = self.files.concat(result.list);
-
-        for (var i in result.options) {
-            self.fileOptions[i] = result.options[i];
-        }
-    }
-
-    if (project.omit) {
-        project.omit.forEach(function(omitPath){
-            self.omit.push(path.normalize(base + omitPath));
-        });
-    }
-
-    if (project.appendFilesFrom) {
-        self.importprojects(project.appendFilesFrom, "append");
-    }
-    if (project.prependFilesFrom) {
-        self.importprojects(project.prependFilesFrom, "prepend");
-    }
-
-
-    self.omit.forEach(function(omitPath){
-        var inx;
-        if ((inx = self.files.indexOf(omitPath)) != -1) {
-            self.files.splice(inx, 1);
-        }
-    });
+    self.jsonFile       = JsonFile.get(projectFile);
+    self.projectFile    = projectFile;
+    self.bld            = new Build(self.jsonFile, action);
 
 };
 
 Builder.prototype   = {
 
-    projectFile:   null,
-    allActions:     null,
-    action:         null,
-    project:       null,
-    buildList:      null,
-    included:       null,
-    files:          null,
-    base:           null,
-    fileOptions:    null,
-    omit:           null,
+    /**
+     * @type JsonFile
+     */
+    jsonFile:       null,
+
+    /**
+     * @type Build
+     */
+    bld:            null,
+    projectFile:    null,
 
     build:          function() {
 
-        var self    = this;
+        var self    = this,
+            bld     = self.bld;
 
-        if (self.files.length) {
-            self.resolveFiles();
-            self.prepareBuildList();
-
-            if (self.project.target) {
-                self.concat();
-            }
+        if (bld.files.length && bld.target) {
+            self.concat();
         }
-    },
-
-    resolveFiles:   function() {
-        var self = this,
-            opt,
-            file;
-
-        self.files.forEach(function(filePath){
-            file = getOrCreate(filePath);
-
-            if ((opt = self.fileOptions[filePath]) && opt.as) {
-                file.addAs(opt.as);
-            }
-        });
-    },
-
-    prepareBuildList: function() {
-
-        var self        = this,
-            buildList   = [],
-            included    = {},
-            stack       = [],
-            omit        = self.omit;
-
-        var processFile = function(file) {
-
-            stack.push(file.path);
-
-            if (stack.length > 50) {
-                console.log(stack);
-                throw "Recursive requirement";
-            }
-
-            file.requires.forEach(function(requiredFile){
-                if (omit.indexOf(requiredFile) == -1) {
-                    processFile(File.get(requiredFile));
-                }
-            });
-
-            if (!included[file.path]) {
-                included[file.path] = true;
-                buildList.push(file.path);
-            }
-
-            stack.pop();
-        };
-
-        this.files.forEach(function(filePath){
-            processFile(File.get(filePath));
-        });
-
-        this.buildList = buildList;
     },
 
     concat:        function() {
 
         var self        = this,
-            project    = self.project,
-            target      = path.normalize(self.base + project.target),
+            bld         = self.bld,
+            target      = path.normalize(self.jsonFile.base + bld.target),
             content     = "";
 
         console.log("Building " + path.basename(target));
@@ -158,40 +63,38 @@ Builder.prototype   = {
             fs.unlinkSync(target);
         }
 
-        if (project.require) {
-            var rs = project.require,
+        if (bld.require) {
+            var rs = bld.require,
                 module;
+
             for (module in rs) {
                 content += "var " + rs[module] + " = require('"+module+"');\n"
             }
         }
 
-        if (project.prepend) {
-            project.prepend.forEach(function(file) {
-                var filePath = path.normalize(self.base + file);
+        if (bld.prepend) {
+            bld.prepend.forEach(function(file) {
+                var filePath = path.normalize(self.jsonFile.base + file);
                 content += fs.readFileSync(filePath).toString();
+                content += "\n";
             });
         }
 
-        self.buildList.forEach(function(filePath){
+        bld.buildList.forEach(function(filePath){
 
             if (!File.exists(filePath)) {
                 throw filePath + " was not resolved";
             }
 
-            content += File.get(filePath).getContent(self.fileOptions[filePath]);
+            content += File.get(filePath).getContent(bld.fileOptions[filePath]);
+            content += "\n";
         });
 
-        if (project.expose) {
-            content += "\n";
+        if (bld.expose) {
 
-            var createdNs = {
-                "MetaphorJs.lib": true,
-                "MetaphorJs.view": true,
-                "MetaphorJs.cmp": true
-            };
+            var createdNs = {"MetaphorJs": true};
 
-            if (project.expose == "all") {
+            if (bld.expose == "all") {
                 var names = self.collectNames();
                 names.forEach(function(name){
                     if (name != "MetaphorJs") {
@@ -201,7 +104,7 @@ Builder.prototype   = {
             }
             else {
 
-                project.expose.forEach(function (varName) {
+                bld.expose.forEach(function (varName) {
 
                     if (typeof varName == "string") {
                         content += "MetaphorJs['" + varName + "'] = " + varName + ";\n";
@@ -219,26 +122,27 @@ Builder.prototype   = {
             }
         }
 
-        if (project.append) {
-            project.append.forEach(function(file) {
-                var filePath = path.normalize(self.base + file);
+        if (bld.append) {
+            bld.append.forEach(function(file) {
+                var filePath = path.normalize(self.jsonFile.base + file);
                 content += fs.readFileSync(filePath).toString();
+                content += "\n";
             });
         }
 
-        if (project.global) {
-            content += "\ntypeof global != \"undefined\" ? " +
+        if (bld.global) {
+            content += "typeof global != \"undefined\" ? " +
                        "(global['MetaphorJs'] = MetaphorJs) : (window['MetaphorJs'] = MetaphorJs);\n";
         }
 
-        if (project.exports) {
-            content += "\nmodule.exports = " + project.exports + ";\n";
+        if (bld.exports) {
+            content += "module.exports = " + bld.exports + ";\n";
         }
 
-        if (project.define) {
-            var defName = project.define.name,
-                defDeps = project.define.deps,
-                defRet  = project.define.return,
+        if (bld.define) {
+            var defName = bld.define.name,
+                defDeps = bld.define.deps,
+                defRet  = bld.define.return,
                 start   = 'define("'+defName+'", ',
                 end     = "\n});\n",
                 deps    = [],
@@ -262,11 +166,12 @@ Builder.prototype   = {
             }
 
             content = start + content + end;
+            content += "\n";
         }
 
-        if (project.wrap) {
-            var wrapStart   = project.wrapStart || "(function(){\n\"use strict\";\n";
-            var wrapEnd     = project.wrapEnd || "\n}());";
+        if (bld.wrap) {
+            var wrapStart   = bld.wrapStart || "(function(){\n\"use strict\";\n";
+            var wrapEnd     = bld.wrapEnd || "\n}());";
             content         = wrapStart + content + wrapEnd;
         }
 
@@ -274,92 +179,12 @@ Builder.prototype   = {
     },
 
 
-    getFiles:       function() {
-        return this.files;
-    },
-
-    importprojects: function(list, mode) {
-
-        var self    = this;
-
-        if (typeof list == "string") {
-            if (self.allActions[list]) {
-                self.importFilesFrom(self.projectFile, list, mode);
-            }
-        }
-        else {
-            list.forEach(function(fromproject){
-
-                var projectFile,
-                    action;
-
-                if (typeof fromproject == "string") {
-                    if (self.allActions[fromproject]) {
-                        self.importFilesFrom(self.projectFile, fromproject, mode);
-                        return;
-                    }
-                    else {
-                        projectFile    = fromproject;
-                        action          = null;
-                    }
-                }
-                else {
-                    projectFile    = path.normalize(self.base + fromproject[0]);
-                    action          = fromproject[1];
-                }
-
-                if (!projectFile) {
-                    console.log(fromproject);
-                    throw "No project file";
-                }
-
-                self.importFilesFrom(projectFile, action, mode);
-            });
-        }
-    },
-
-    importFilesFrom: function(projectFile, action, mode) {
-
-        var self        = this,
-            b           = new Builder(action, projectFile),
-            importFiles = b.getFiles(),
-            curFiles    = self.files,
-            result;
-
-        importFiles.forEach(function(filePath){
-            if (b.fileOptions[filePath] && !self.fileOptions[filePath]) {
-                self.fileOptions[filePath] = b.fileOptions[filePath];
-            }
-        });
-
-        if (mode == "append") {
-
-            result      = curFiles.slice();
-
-            importFiles.forEach(function(filePath){
-                if (result.indexOf(filePath) == -1) {
-                    result.push(filePath);
-                }
-            });
-        }
-        else {
-            result      = importFiles.slice();
-
-            curFiles.forEach(function(filePath){
-                if (result.indexOf(filePath) == -1) {
-                    result.push(filePath);
-                }
-            });
-        }
-
-        self.files      = result;
-    },
 
     compile:        function(onFinish) {
 
         var self        = this,
-            project    = self.project,
-            source      = path.normalize(self.base + project.target),
+            bld         = self.bld,
+            source      = path.normalize(self.jsonFile.base + bld.target),
             target      = source.replace(/\.js$/, ".min.js"),
             args        = [],
             proc,
@@ -375,11 +200,11 @@ Builder.prototype   = {
 
         args.push('--language_in=ECMASCRIPT5_STRICT');
 
-        if (project.compileAdvanced) {
+        if (bld.compileAdvanced) {
             args.push('--compilation_level=ADVANCED');
         }
 
-        if (project.compileSourceMap) {
+        if (bld.compileSourceMap) {
             args.push("--create_source_map=" + target + ".map");
         }
 
@@ -403,7 +228,7 @@ Builder.prototype   = {
     collectNames: function() {
 
         var self    = this,
-            bl      = self.buildList,
+            bl      = self.bld.buildList,
             names   = [],
             uni     = {};
 
@@ -472,6 +297,7 @@ Builder.build = function(action, projectFile) {
     actions.forEach(function(action){
         var builder     = new Builder(action, projectFile);
         builder.build();
+
     });
 };
 
