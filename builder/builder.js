@@ -169,6 +169,8 @@ Builder.prototype   = {
             content += "\n";
         }
 
+        content = File.removeDupReqs(content);
+
         if (bld.wrap) {
             var wrapStart   = bld.wrapStart || "(function(){\n\"use strict\";\n";
             var wrapEnd     = bld.wrapEnd || "\n}());";

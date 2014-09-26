@@ -3,9 +3,11 @@ var fs              = require("fs"),
     path            = require("path"),
 
     rStrict         = /'use strict'|"use strict";?/g,
-    rRequires       = /([^\s]+)\s*=\s*require\(['|"]([^)]+)['|"]\)/,
+    rRequires       = /([^\s]+)\s*=\s*require\(['|"]([^)]+)['|"]\)\s*,?/,
     rInclude        = /[^=\s]?\s*(require\(['|"]([^)]+)['|"]\);?)/,
     rEmptyVar       = /var[\s|,]*;/g,
+    rVarSpace       = /var\s+/g,
+    rTrailComma     = /,\s*;/g,
 
     isFile          = require("../lib/isFile.js"),
 
@@ -118,6 +120,7 @@ File.prototype = {
         var self        = this,
             content     = fs.readFileSync(self.path).toString(),
             base        = self.base,
+            start       = 0,
             required,
             matches;
 
@@ -125,9 +128,17 @@ File.prototype = {
             return;
         }
 
-        while (matches = rRequires.exec(content)) {
+        while (matches = rRequires.exec(content.substr(start))) {
+
+            required    = matches[2];
+
+            if (required.indexOf(".js") == -1) {
+                start += matches.index + required.length;
+                continue;
+            }
+
+            required    = path.normalize(base + required);
             content     = content.replace(matches[0], "");
-            required    = path.normalize(base + matches[2]);
 
             if (!isFile(required)) {
                 throw required + " required in " + self.path + " does not exist";
@@ -147,10 +158,20 @@ File.prototype = {
         }
 
         content = content.replace(rEmptyVar, "");
+        content = content.replace(rTrailComma, ";");
+        start   = 0;
 
-        while (matches = rInclude.exec(content)) {
+        while (matches = rInclude.exec(content.substr(start))) {
+
+            required    = matches[2];
+
+            if (required.indexOf(".js") == -1) {
+                start += required.length;
+                continue;
+            }
+
             content     = content.replace(matches[1], "");
-            required    = path.normalize(base + matches[2]);
+            required    = path.normalize(base + required);
 
             if (!isFile(required)) {
                 throw required + " required in " + self.path + " does not exist";
@@ -224,6 +245,36 @@ File.exists = function(filePath) {
 
 File.get = function(filePath) {
     return allFiles[filePath];
+};
+
+File.removeDupReqs = function(content) {
+
+    var matches,
+        required,
+        name,
+        start = 0,
+        used = {};
+
+    while (matches = rRequires.exec(content.substr(start))) {
+
+        name        = matches[1];
+        required    = matches[2];
+
+        if (used[name]) {
+            content = content.substr(0, start + matches.index) +
+                      content.substr(start + matches.index + matches[0].length);
+        }
+        else {
+            used[name] = true;
+            start += matches.index + matches[0].length;
+        }
+    }
+
+    content = content.replace(rEmptyVar, "");
+    content = content.replace(rTrailComma, ";");
+    content = content.replace(rVarSpace, "var ");
+
+    return content;
 };
 
 module.exports = File;

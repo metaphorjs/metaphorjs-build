@@ -4,7 +4,7 @@ var path = require("path"),
     isFile = require("../lib/isFile.js"),
     isDir = require("../lib/isDir.js");
 
-module.exports = function(base, filename) {
+module.exports = function(base, filename, ext) {
 
     var fileList,
         dir,
@@ -24,8 +24,16 @@ module.exports = function(base, filename) {
 
         fileList.forEach(function(filename) {
             filePath = path.normalize(dir + "/" + filename);
-            if (isFile(filePath) && path.extname(filePath) == ".js") {
-                files.push(filePath);
+            if (isFile(filePath)) {
+                if (!ext) {
+                    files.push(filePath);
+                }
+                else if (typeof ext == "string" && path.extname(filePath) == "." + ext) {
+                    files.push(filePath);
+                }
+                else if (path.extname(filePath).match(ext)) {
+                    files.push(filePath);
+                }
             }
             else if (isDir(filePath) && levels > 1) {
                 readDir(filePath);
@@ -34,11 +42,11 @@ module.exports = function(base, filename) {
     };
 
     if (levels > 0) {
-        dir         = path.normalize(base + filename.substr(0, filename.length - (levels + 1)));
+        dir     = path.normalize(base + filename.substr(0, filename.length - (levels + 1)));
         readDir(dir);
     }
     else {
-        files    = [path.normalize(base + filename)];
+        files   = [path.normalize(base + filename)];
     }
 
     return files;
