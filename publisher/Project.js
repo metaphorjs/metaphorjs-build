@@ -30,9 +30,10 @@ var Project = function(location) {
     self.location   = location;
     self.name       = path.basename(location);
     self.git        = new Git(location);
-    self.hasNpm     = isFile(location + "/package.json");
-    self.hasBower   = isFile(location + "/bower.json");
     self.config     = require(location + "/metaphorjs.json");
+    self.hasNpm     = isFile(location + "/package.json") && self.config.npm !== false;
+    self.hasBower   = isFile(location + "/bower.json");
+
 };
 
 Project.prototype = {
@@ -55,26 +56,13 @@ Project.prototype = {
                 var test = tests.shift();
                 if (test) {
                     process.chdir(self.location);
-                    var service,
-                        wait = 0;
-
-                    if (test.service) {
-                        service = cp.spawn(test.service.cmd, test.service.args || []);
-                        wait = test.service.wait || 0;
-                    }
 
                     var runTest = function() {
-                        passthru(test.cmd, test.args || []).then(function(){
-
-                            if (test.service) {
-                                service.kill("SIGHUP");
-                            }
-
-                            next();
-                        });
+                        passthru(test.cmd, test.args || []).then(next, next);
                     };
 
-                    setTimeout(runTest, wait);
+                    runTest();
+
                 }
                 else {
                     promise.resolve();

@@ -134,7 +134,7 @@ Build.prototype = {
                 });
 
                 omit.forEach(function(omitFile){
-                    var list = resolveFileList(jsonFile.base, omitFile);
+                    var list = resolveFileList(jsonFile.base, omitFile, 'js');
                     list.forEach(function(omitFile){
                         allOmits[omitFile] = true;
                     });
@@ -168,7 +168,7 @@ Build.prototype = {
                     processMixin(getMixin(json, fileDef[1]), json);
                 }
                 else {
-                    list = resolveFileList(jsonFile.base, file);
+                    list = resolveFileList(jsonFile.base, file, 'js');
                     list.forEach(function(file){
                         addFile(file, fileDef[1]);
                     });
