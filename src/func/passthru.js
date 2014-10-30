@@ -1,6 +1,6 @@
 
 var cp = require("child_process"),
-    Promise = require("../../metaphorjs-promise/src/metaphorjs.promise.js");
+    Promise = require("metaphorjs-promise");
 
 /**
  * @param cmd

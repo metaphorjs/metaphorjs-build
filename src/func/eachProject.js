@@ -1,6 +1,6 @@
 
-var isDir = require("./isDir.js"),
-    isFile = require("./isFile.js"),
+var isDir = require("../../../metaphorjs/src/func/fs/isDir.js"),
+    isFile = require("../../../metaphorjs/src/func/fs/isFile.js"),
     fs = require("fs");
 
 /**

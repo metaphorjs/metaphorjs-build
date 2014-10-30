@@ -1,7 +1,7 @@
 
-var resolveFileList = require("../builder/resolveFileList.js"),
+var getFileList = require("../../../metaphorjs/src/func/fs/getFileList.js"),
     path = require("path"),
-    JsonFile = require("../lib/JsonFile.js"),
+    JsonFile = require("./JsonFile.js"),
     File = require("./File.js");
 
 var Build = function(jsonFile, name) {
@@ -13,15 +13,19 @@ var Build = function(jsonFile, name) {
     self.files          = [];
     self.fileOptions    = {};
 
-    var raw = jsonFile.getRawBuild(name),
+    var raw = typeof name == "string" ?
+                jsonFile.build[name] || jsonFile.mixin[name] :
+                name,
         key;
 
-    for (key in raw) {
-        self[key] = raw[key];
-    }
+    if (raw) {
+        for (key in raw) {
+            self[key] = raw[key];
+        }
 
-    self.collectFiles(raw);
-    self.prepareBuildList();
+        self.collectFiles(raw);
+        self.prepareBuildList();
+    }
 };
 
 Build.prototype = {
@@ -57,6 +61,11 @@ Build.prototype = {
     target: "",
 
     /**
+     * @type {string}
+     */
+    specificTarget: null,
+
+    /**
      * @type {bool}
      */
     compile: true,
@@ -84,7 +93,7 @@ Build.prototype = {
             allOmits    = {},
             allReplaces = {},
 
-            addFile = function(path, props) {
+            addFile = function(path, props, temporary) {
                 if (!all[path]) {
                     all[path] = props || {};
                 }
@@ -109,19 +118,40 @@ Build.prototype = {
                         }
                     }
                 }
+
+                if (temporary) {
+                    all[path].temporary = true;
+                }
             },
 
             getMixin = function(jsonFile, name) {
                 return jsonFile.mixin[name] || {};
             },
 
-            processMixin = function(mixin, jsonFile) {
+            renderMixin = function(jsonFile, name, props) {
+
+                var raw = jsonFile.build[name] || jsonFile.mixin[name],
+                    ext = raw.extension || "js",
+                    tmp = "/tmp/mjs-build-tmp-" + (new Date).getTime() + "." + ext,
+                    r = require,
+                    Builder = typeof Builder == "undefined" ? r("./Builder.js") : Builder;
+
+                raw.specificTarget = tmp;
+
+                var builder = new Builder(raw, jsonFile);
+                builder.build();
+
+                addFile(tmp, props);
+            },
+
+            processMixin = function(mixin, jsonFile, props) {
 
                 var files   = mixin.files || [],
                     omit    = mixin.omit || [],
                     replace = mixin.replace || [],
                     mixins  = mixin.mixins || [],
-                    base    = jsonFile.base;
+                    base    = jsonFile.base,
+                    ext     = mixin.extension || "js";
 
                 mixins.forEach(function(item){
                     if (typeof item == "string") {
@@ -134,7 +164,7 @@ Build.prototype = {
                 });
 
                 omit.forEach(function(omitFile){
-                    var list = resolveFileList(jsonFile.base, omitFile, 'js');
+                    var list = getFileList(jsonFile.base +'/'+ omitFile, ext);
                     list.forEach(function(omitFile){
                         allOmits[omitFile] = true;
                     });
@@ -157,18 +187,30 @@ Build.prototype = {
 
                 var file = fileDef[0],
                     list,
-                    json;
+                    json,
+                    ext;
 
                 // mixin
                 if (file.indexOf('.') == -1 && file.indexOf('*') == -1) {
-                    processMixin(getMixin(jsonFile, file), jsonFile);
+                    if (fileDef[1]) {
+                        renderMixin(jsonFile, file, fileDef[1]);
+                    }
+                    else {
+                        processMixin(getMixin(jsonFile, file), jsonFile);
+                    }
                 }
                 else if (path.extname(file) == ".json") {
                     json = JsonFile.get(jsonFile.base + file);
-                    processMixin(getMixin(json, fileDef[1]), json);
+                    if (fileDef[2]) {
+                        renderMixin(json, fileDef[1], fileDef[2]);
+                    }
+                    else {
+                        processMixin(getMixin(json, fileDef[1]), json);
+                    }
                 }
                 else {
-                    list = resolveFileList(jsonFile.base, file, 'js');
+                    ext = path.extname(file).substr(1) || jsonFile.extension || "js";
+                    list = getFileList(jsonFile.base +'/'+ file, ext);
                     list.forEach(function(file){
                         addFile(file, fileDef[1]);
                     });

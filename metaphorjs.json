@@ -2,5 +2,25 @@
     "version": "0.3.5",
     "push": [
         "github"
-    ]
+    ],
+
+    "build": {
+        "npm": {
+            "target": "dist/metaphorjs.build.js",
+            "auto": true,
+            "files": [
+                ["../metaphorjs/src/MetaphorJs.js", {"as": "MetaphorJs"}],
+                ["src/**", {"as": "*"}]
+            ],
+            "expose": [
+                "Build",
+                "Builder",
+                "File",
+                "JsonFile",
+                "Git",
+                "Project"
+            ],
+            "exports": "MetaphorJs"
+        }
+    }
 }

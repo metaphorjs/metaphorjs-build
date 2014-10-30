@@ -3,26 +3,25 @@ var fs              = require("fs"),
     child           = require("child_process"),
     path            = require("path"),
     File            = require("./File.js"),
-    getOrCreate     = File.getOrCreate,
-    isFile          = require("../lib/isFile.js"),
-    isDir           = require("../lib/isDir.js"),
-    eachProject     = require("../lib/eachProject.js"),
-    Promise         = require("../../metaphorjs-promise/src/metaphorjs.promise.js"),
+    isFile          = require("../../../metaphorjs/src/func/fs/isFile.js"),
+    eachProject     = require("../func/eachProject.js"),
+    Promise         = require("metaphorjs-promise"),
     Build           = require("./Build.js"),
-    JsonFile        = require("../lib/JsonFile.js");
+    JsonFile        = require("./JsonFile.js"),
+    isArray         = require("../../../metaphorjs/src/func/isArray.js");
 
 
 
 var Builder         = function(action, projectFile) {
 
-    if (!isFile(projectFile)) {
+    if (!isFile(projectFile) && !(projectFile instanceof JsonFile)) {
         throw projectFile + " not found";
     }
 
     var self            = this;
 
-    self.jsonFile       = JsonFile.get(projectFile);
-    self.projectFile    = projectFile;
+    self.jsonFile       = projectFile instanceof JsonFile ? projectFile : JsonFile.get(projectFile);
+    self.projectFile    = projectFile instanceof JsonFile ? projectFile.path : projectFile;
     self.bld            = new Build(self.jsonFile, action);
 
 };
@@ -54,8 +53,10 @@ Builder.prototype   = {
 
         var self        = this,
             bld         = self.bld,
-            target      = path.normalize(self.jsonFile.base + bld.target),
-            content     = "";
+            target      = bld.specificTarget || path.normalize(self.jsonFile.base + bld.target),
+            content     = "",
+            file,
+            fileOpt;
 
         console.log("Building " + path.basename(target));
 
@@ -65,10 +66,29 @@ Builder.prototype   = {
 
         if (bld.require) {
             var rs = bld.require,
-                module;
+                m;
 
-            for (module in rs) {
-                content += "var " + rs[module] + " = require('"+module+"');\n"
+            for (m in rs) {
+                var req = rs[m];
+                if (typeof req == "string") {
+                    content += "var " + req + " = " + "require" + "('" + m + "');\n"
+                }
+                else {
+                    var reqStr = "var " + req.as + " = " + "require" + "('"+ m +"')";
+                    var argStr = req.args ? req.args.join(", ") : "";
+                    if (req.call) {
+                        if (req.call === true) {
+                            reqStr += "(" + argStr + ")";
+                        }
+                        else {
+                            reqStr += "." + req.call + "(" + argStr + ")";
+                        }
+                    }
+                    else if (argStr) {
+                        reqStr += "("+ argStr +")";
+                    }
+                    content += reqStr + ";\n";
+                }
             }
         }
 
@@ -86,37 +106,62 @@ Builder.prototype   = {
                 throw filePath + " was not resolved";
             }
 
-            content += File.get(filePath).getContent(bld.fileOptions[filePath]);
+            file = File.get(filePath);
+            fileOpt = bld.fileOptions[filePath];
+
+            content += file.getContent(fileOpt);
             content += "\n";
+
+            if (fileOpt && fileOpt.temporary) {
+                fs.unlinkSync(file.path);
+            }
         });
 
         if (bld.expose) {
 
-            var createdNs = {"MetaphorJs": true};
+            var createdNs = {};
+
+            var exposeIn = bld.exposeIn || "MetaphorJs";
+
+            createdNs[exposeIn] = true;
 
             if (bld.expose == "all") {
                 var names = self.collectNames();
                 names.forEach(function(name){
-                    if (name != "MetaphorJs") {
-                        content += "MetaphorJs['" + name + "'] = " + name + ";\n";
+                    if (bld.exposeSkip && bls.exposeSkip.indexOf(name) != -1) {
+                        return;
+                    }
+                    if (name != exposeIn) {
+                        content += exposeIn + "['" + name + "'] = " + name + ";\n";
                     }
                 });
             }
             else {
 
+                var ns, as;
+
                 bld.expose.forEach(function (varName) {
 
                     if (typeof varName == "string") {
-                        content += "MetaphorJs['" + varName + "'] = " + varName + ";\n";
+                        content += exposeIn + "['" + varName + "'] = " + varName + ";\n";
                     }
                     else {
-                        var ns = varName[0];
-                        varName = varName[1];
+
+                        if (isArray(varName)) {
+                            ns = varName[0];
+                            as = varName[2] || varName[1];
+                            varName = varName[1];
+                        }
+                        else {
+                            ns = varName.ns || exposeIn;
+                            as = varName.as || varName.name;
+                            varName = varName.name;
+                        }
 
                         if (!createdNs[ns]) {
                             content += ns + " || (" + ns + " = {});\n";
                         }
-                        content += ns + "['" + varName + "'] = " + varName + ";\n";
+                        content += ns + "['" + as + "'] = " + varName + ";\n";
                     }
                 });
             }
@@ -136,7 +181,16 @@ Builder.prototype   = {
         }
 
         if (bld.exports) {
-            content += "module.exports = " + bld.exports + ";\n";
+            if (bld.wrap) {
+                content += "return " + bld.exports + ";\n";
+            }
+            else {
+                content += "module"+ ".exports = " + bld.exports + ";\n";
+            }
+        }
+
+        if (bld.returns) {
+            content += "return " + bld.returns + ";\n";
         }
 
         if (bld.define) {
@@ -172,9 +226,32 @@ Builder.prototype   = {
         content = File.removeDupReqs(content);
 
         if (bld.wrap) {
-            var wrapStart   = bld.wrapStart || "(function(){\n\"use strict\";\n";
-            var wrapEnd     = bld.wrapEnd || "\n}());";
+            var wrap        = bld.wrap;
+            if (typeof wrap != "object") {
+                wrap = {};
+            }
+            var wrapArgs    = "";
+            if (wrap.args) {
+                wrapArgs =  wrap.args.join(", ");
+            }
+
+            var wrapName    = wrap.name || "";
+
+            var wrapStart   = wrap.start ||
+                                wrap.deferred ?
+                                    "function "+wrapName+"("+wrapArgs+") {\n\"use strict\";\n" :
+                                    "(function("+wrapArgs+"){\n\"use strict\";\n";
+
+            var wrapEnd     = wrap.end ||
+                                wrap.deferred ?
+                                    "\n};" :
+                                    "\n}("+wrapArgs+"));";
+
             content         = wrapStart + content + wrapEnd;
+
+            if (bld.exports || wrap.exported) {
+                content = "module" + ".exports = " + content;
+            }
         }
 
         fs.writeFileSync(target, content);
@@ -235,7 +312,7 @@ Builder.prototype   = {
             uni     = {};
 
         bl.forEach(function(path) {
-            var file = getOrCreate(path),
+            var file = File.getOrCreate(path),
                 as  = file.as;
 
             as.forEach(function(name) {
@@ -303,6 +380,20 @@ Builder.build = function(action, projectFile) {
     });
 };
 
+Builder.buildAll = function(auto) {
+
+    var b;
+
+    eachBuild(function(build, projectFile, buildName){
+        if (!auto || build.auto) {
+            b = new Builder(buildName, projectFile);
+            b.build();
+        }
+    });
+
+};
+
+
 Builder.compile = function(action, projectFile) {
 
     if (!projectFile) {
@@ -323,18 +414,6 @@ Builder.compile = function(action, projectFile) {
     return deferred;
 };
 
-Builder.buildAll = function(auto) {
-
-    var b;
-
-    eachBuild(function(build, projectFile, buildName){
-        if (!auto || build.auto) {
-            b = new Builder(buildName, projectFile);
-            b.build();
-        }
-    });
-
-};
 
 Builder.compileAll = function(noExit, noBuild) {
 
