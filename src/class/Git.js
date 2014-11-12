@@ -16,11 +16,13 @@ Git.prototype = {
 
     location: null,
 
-    hasChanges: function() {
+    hasChanges: function(wholeProject) {
 
         var deferred = new Promise,
             loc = this.location,
-            check = isDir(loc + "/src") ? "./src" : ".";
+            check = wholeProject ?
+                        (".") :
+                        (isDir(loc + "/src") ? "./src" : ".");
 
         process.chdir(loc);
 

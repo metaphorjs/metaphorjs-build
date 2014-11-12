@@ -38,6 +38,8 @@ module.exports = function(){
         self.hasNpm     = isFile(location + "/package.json") && self.config.npm !== false;
         self.hasBower   = isFile(location + "/bower.json");
 
+        self.npmJson    = self.hasNpm ? require(location + "/package.json") : null;
+        self.bowerJson  = self.hasBower ? require(location + "/bower.json") : null;
     };
 
     Project.prototype = {
@@ -119,7 +121,7 @@ module.exports = function(){
                 };
 
             // check if there were changes
-            git.hasChanges()
+            git.hasChanges(options.w === true)
                 .fail(onErr)
                 // build and test
                 .then(function(hasChanges){
@@ -165,6 +167,9 @@ module.exports = function(){
                 // set new version
                 .then(function(){
                     if (deferred.isPending()) {
+
+                        self.syncPackageFiles();
+
                         if (vMod) {
                             newVersion = self.setVersion(vMod);
                             versionSet = true;
@@ -257,6 +262,23 @@ module.exports = function(){
             return deferred;
         },
 
+        syncPackageFiles: function() {
+
+            var self    = this,
+                pJson   = self.location + "/package.json",
+                bJson   = self.location + "/bower.json";
+
+            if (self.hasNpm) {
+                self.npmJson.description = self.config.description;
+                fs.writeFileSync(pJson, JSON.stringify(self.npmJson, null, "    "));
+            }
+            if (self.hasBower) {
+                self.bowerJson.description = self.config.description;
+                fs.writeFileSync(bJson, JSON.stringify(self.bowerJson, null, "    "));
+            }
+
+        },
+
         setVersion: function(mod) {
 
             var self    = this,
@@ -264,24 +286,20 @@ module.exports = function(){
                 pJson   = self.location + "/package.json",
                 bJson   = self.location + "/bower.json",
                 mjs     = require(mJson),
-                pjs,
-                bjs,
                 version = mjs.version;
 
             console.log(version, '->', (version = increaseVersion(version, mod)));
 
-            mjs.version = version;
-            fs.writeFileSync(mJson, JSON.stringify(mjs, null, "    "));
+            self.config.version = version;
+            fs.writeFileSync(mJson, JSON.stringify(self.config, null, "    "));
 
             if (self.hasNpm) {
-                pjs     = require(pJson);
-                pjs.version = version;
-                fs.writeFileSync(pJson, JSON.stringify(pjs, null, "    "));
+                self.npmJson.version = version;
+                fs.writeFileSync(pJson, JSON.stringify(self.npmJson, null, "    "));
             }
             if (self.hasBower) {
-                bjs     = require(bJson);
-                bjs.version = version;
-                fs.writeFileSync(bJson, JSON.stringify(bjs, null, "    "));
+                self.bowerJson.version = version;
+                fs.writeFileSync(bJson, JSON.stringify(self.bowerJson, null, "    "));
             }
 
             return version;

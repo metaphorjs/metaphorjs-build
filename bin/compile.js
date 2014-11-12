@@ -9,9 +9,16 @@ if (process.env['METAPHORJS_DEV'] || args.dev) {
 }
 
 if (args.all) {
-    require("./builder/Builder.js").compileAll();
+    require("./../dist/metaphorjs.build.js")
+        .Builder
+        .compileAll(args.auto || false);
 }
 else {
-    require("./builder/Builder.js")
-        .compile(process.argv[2], process.argv[3]);
+
+    var jsonFile = args._.pop(),
+        name = args._.pop();
+
+    require("./../dist/metaphorjs.build.js")
+        .Builder
+        .compile(args._[0], args._[1]);
 }

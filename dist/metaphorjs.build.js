@@ -74,11 +74,127 @@ var getFileList = function(directory, ext) {
     return files;
 };
 
+var toString = Object.prototype.toString;
+
+var undf = undefined;
+
+
+
+
+var varType = function(){
+
+    var types = {
+        '[object String]': 0,
+        '[object Number]': 1,
+        '[object Boolean]': 2,
+        '[object Object]': 3,
+        '[object Function]': 4,
+        '[object Array]': 5,
+        '[object RegExp]': 9,
+        '[object Date]': 10
+    };
+
+
+    /**
+     * 'string': 0,
+     * 'number': 1,
+     * 'boolean': 2,
+     * 'object': 3,
+     * 'function': 4,
+     * 'array': 5,
+     * 'null': 6,
+     * 'undefined': 7,
+     * 'NaN': 8,
+     * 'regexp': 9,
+     * 'date': 10,
+     * unknown: -1
+     * @param {*} value
+     * @returns {number}
+     */
+    return function varType(val) {
+
+        if (!val) {
+            if (val === null) {
+                return 6;
+            }
+            if (val === undf) {
+                return 7;
+            }
+        }
+
+        var num = types[toString.call(val)];
+
+        if (num === undf) {
+            return -1;
+        }
+
+        if (num == 1 && isNaN(val)) {
+            return 8;
+        }
+
+        return num;
+    };
+
+}();
+
+
+
+function isString(value) {
+    return typeof value == "string" || value === ""+value;
+    //return typeof value == "string" || varType(value) === 0;
+};
+
+
+
+/**
+ * @param {*} value
+ * @returns {boolean}
+ */
+function isArray(value) {
+    return typeof value == "object" && varType(value) === 5;
+};
+
 
 
 
 
 var JsonFile = function(){
+
+    var insertVars = function(string, root) {
+
+        return string.replace(/@{([^}]+)}/ig, function(match, key) {
+
+            if (root[key]) {
+                return root[key];
+            }
+            else {
+                return "";
+            }
+        });
+    };
+
+    var prepareData = function(data, root) {
+
+        var k, val, i, l;
+
+        for (k in data) {
+
+            val = data[k];
+
+            if (isString(val)) {
+                data[k] = insertVars(val, root);
+            }
+            else if (isArray(val)) {
+                for (i = 0, l = val.length; i < l; i++) {
+                    prepareData(data[k][i], root);
+                }
+            }
+            else if (val && typeof val == "object") {
+                prepareData(data[k], root);
+            }
+        }
+    };
+
 
     var JsonFile = function(jsonFilePath) {
 
@@ -93,6 +209,8 @@ var JsonFile = function(){
 
         var json    = require(self.path),
             key;
+
+        prepareData(json, json);
 
         for (key in json) {
             self[key] = json[key];
@@ -825,7 +943,7 @@ var eachProject = function(fn) {
         project,
         eachDir = function(dir){
 
-            dir     = cwd + "/" + dir;
+            dir     = dir ? cwd + "/" + dir : cwd;
             pf      = dir + "/metaphorjs.json";
 
             if (isDir(dir) && isFile(pf)) {
@@ -834,81 +952,9 @@ var eachProject = function(fn) {
             }
         };
 
+
     eachDir("");
     dirs.forEach(eachDir);
-};
-
-var toString = Object.prototype.toString;
-
-var undf = undefined;
-
-
-
-
-var varType = function(){
-
-    var types = {
-        '[object String]': 0,
-        '[object Number]': 1,
-        '[object Boolean]': 2,
-        '[object Object]': 3,
-        '[object Function]': 4,
-        '[object Array]': 5,
-        '[object RegExp]': 9,
-        '[object Date]': 10
-    };
-
-
-    /**
-     * 'string': 0,
-     * 'number': 1,
-     * 'boolean': 2,
-     * 'object': 3,
-     * 'function': 4,
-     * 'array': 5,
-     * 'null': 6,
-     * 'undefined': 7,
-     * 'NaN': 8,
-     * 'regexp': 9,
-     * 'date': 10,
-     * unknown: -1
-     * @param {*} value
-     * @returns {number}
-     */
-    return function varType(val) {
-
-        if (!val) {
-            if (val === null) {
-                return 6;
-            }
-            if (val === undf) {
-                return 7;
-            }
-        }
-
-        var num = types[toString.call(val)];
-
-        if (num === undf) {
-            return -1;
-        }
-
-        if (num == 1 && isNaN(val)) {
-            return 8;
-        }
-
-        return num;
-    };
-
-}();
-
-
-
-/**
- * @param {*} value
- * @returns {boolean}
- */
-function isArray(value) {
-    return typeof value == "object" && varType(value) === 5;
 };
 
 var child           = require("child_process"),
@@ -1418,11 +1464,13 @@ Git.prototype = {
 
     location: null,
 
-    hasChanges: function() {
+    hasChanges: function(wholeProject) {
 
         var deferred = new Promise,
             loc = this.location,
-            check = isDir(loc + "/src") ? "./src" : ".";
+            check = wholeProject ?
+                        (".") :
+                        (isDir(loc + "/src") ? "./src" : ".");
 
         process.chdir(loc);
 
@@ -1492,6 +1540,8 @@ var Project = function(){
         self.hasNpm     = isFile(location + "/package.json") && self.config.npm !== false;
         self.hasBower   = isFile(location + "/bower.json");
 
+        self.npmJson    = self.hasNpm ? require(location + "/package.json") : null;
+        self.bowerJson  = self.hasBower ? require(location + "/bower.json") : null;
     };
 
     Project.prototype = {
@@ -1573,7 +1623,7 @@ var Project = function(){
                 };
 
             // check if there were changes
-            git.hasChanges()
+            git.hasChanges(options.w === true)
                 .fail(onErr)
                 // build and test
                 .then(function(hasChanges){
@@ -1619,6 +1669,9 @@ var Project = function(){
                 // set new version
                 .then(function(){
                     if (deferred.isPending()) {
+
+                        self.syncPackageFiles();
+
                         if (vMod) {
                             newVersion = self.setVersion(vMod);
                             versionSet = true;
@@ -1711,6 +1764,23 @@ var Project = function(){
             return deferred;
         },
 
+        syncPackageFiles: function() {
+
+            var self    = this,
+                pJson   = self.location + "/package.json",
+                bJson   = self.location + "/bower.json";
+
+            if (self.hasNpm) {
+                self.npmJson.description = self.config.description;
+                fs.writeFileSync(pJson, JSON.stringify(self.npmJson, null, "    "));
+            }
+            if (self.hasBower) {
+                self.bowerJson.description = self.config.description;
+                fs.writeFileSync(bJson, JSON.stringify(self.bowerJson, null, "    "));
+            }
+
+        },
+
         setVersion: function(mod) {
 
             var self    = this,
@@ -1718,24 +1788,20 @@ var Project = function(){
                 pJson   = self.location + "/package.json",
                 bJson   = self.location + "/bower.json",
                 mjs     = require(mJson),
-                pjs,
-                bjs,
                 version = mjs.version;
 
             console.log(version, '->', (version = increaseVersion(version, mod)));
 
-            mjs.version = version;
-            fs.writeFileSync(mJson, JSON.stringify(mjs, null, "    "));
+            self.config.version = version;
+            fs.writeFileSync(mJson, JSON.stringify(self.config, null, "    "));
 
             if (self.hasNpm) {
-                pjs     = require(pJson);
-                pjs.version = version;
-                fs.writeFileSync(pJson, JSON.stringify(pjs, null, "    "));
+                self.npmJson.version = version;
+                fs.writeFileSync(pJson, JSON.stringify(self.npmJson, null, "    "));
             }
             if (self.hasBower) {
-                bjs     = require(bJson);
-                bjs.version = version;
-                fs.writeFileSync(bJson, JSON.stringify(bjs, null, "    "));
+                self.bowerJson.version = version;
+                fs.writeFileSync(bJson, JSON.stringify(self.bowerJson, null, "    "));
             }
 
             return version;

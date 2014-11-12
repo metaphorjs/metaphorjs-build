@@ -14,7 +14,7 @@ module.exports = function(fn) {
         project,
         eachDir = function(dir){
 
-            dir     = cwd + "/" + dir;
+            dir     = dir ? cwd + "/" + dir : cwd;
             pf      = dir + "/metaphorjs.json";
 
             if (isDir(dir) && isFile(pf)) {
@@ -22,6 +22,7 @@ module.exports = function(fn) {
                 fn(project, pf);
             }
         };
+
 
     eachDir("");
     dirs.forEach(eachDir);
