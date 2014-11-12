@@ -4,7 +4,7 @@ var args = require("minimist")(process.argv.slice(2), {
     boolean: true
 });
 
-if (args.dev) {
+if (process.env['METAPHORJS_DEV'] || args.dev) {
     require("../../metaphorjs/dev/mockery.js");
 }
 

@@ -131,6 +131,7 @@ module.exports = function(){
                 content     = fs.readFileSync(self.path).toString(),
                 base        = self.base,
                 start       = 0,
+                mjsPath     = process.env.METAPHORJS_PATH,
                 required,
                 matches;
 
@@ -147,12 +148,17 @@ module.exports = function(){
                     continue;
                 }
 
-                required    = path.normalize(base + required);
-                content     = content.replace(matches[0], "");
-
-                if (!isFile(required)) {
+                if (isFile(path.normalize(base + required))) {
+                    required    = path.normalize(base + required);
+                }
+                else if (isFile(mjsPath +"/"+ required)) {
+                    required    = mjsPath +"/"+ required;
+                }
+                else {
                     throw required + " required in " + self.path + " does not exist";
                 }
+
+                content     = content.replace(matches[0], "");
 
                 self.reqNames[matches[1]] = required;
 

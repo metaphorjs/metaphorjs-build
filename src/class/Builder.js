@@ -400,7 +400,7 @@ Builder.compile = function(action, projectFile) {
         projectFile = process.cwd() + "/metaphorjs.json";
     }
     if (!action) {
-        throw "Must specify build. Or use mjs-compile-all";
+        throw "Must specify build. Or use mjs-compile --all";
     }
 
     var deferred    = new Promise;

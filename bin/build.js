@@ -4,7 +4,7 @@ var args = require("minimist")(process.argv.slice(2), {
     boolean: true
 });
 
-if (args.dev) {
+if (process.env['METAPHORJS_DEV'] || args.dev) {
     require("../../metaphorjs/dev/mockery.js");
 }
 
@@ -14,6 +14,9 @@ if (args.all) {
         .buildAll(args.auto || false);
 }
 else {
+    var jsonFile = args._.pop(),
+        name = args._.pop();
+
     require("./../dist/metaphorjs.build.js")
         .Builder
         .build(args._[0], args._[1]);
