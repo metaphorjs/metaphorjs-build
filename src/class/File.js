@@ -1,7 +1,7 @@
 
 var fs              = require("fs"),
     path            = require("path"),
-    isFile          = require("../../../metaphorjs/src/func/fs/isFile.js");
+    resolvePath     = require("../func/resolvePath.js");
 
 
 
@@ -131,7 +131,6 @@ module.exports = function(){
                 content     = fs.readFileSync(self.path).toString(),
                 base        = self.base,
                 start       = 0,
-                mjsPath     = process.env.METAPHORJS_PATH,
                 required,
                 matches;
 
@@ -141,21 +140,14 @@ module.exports = function(){
 
             while (matches = rRequires.exec(content.substr(start))) {
 
-                required    = matches[2];
+                required    = resolvePath(matches[2], [base]);
 
-                if (required.indexOf(".js") == -1) {
-                    start += matches.index + required.length;
+                if (required === true) {
+                    start += matches.index + matches[2].length;
                     continue;
                 }
-
-                if (isFile(path.normalize(base + required))) {
-                    required    = path.normalize(base + required);
-                }
-                else if (isFile(mjsPath +"/"+ required)) {
-                    required    = mjsPath +"/"+ required;
-                }
-                else {
-                    throw required + " required in " + self.path + " does not exist";
+                else if (required === false) {
+                    throw matches[2] + " required in " + self.path + " does not exist";
                 }
 
                 content     = content.replace(matches[0], "");
@@ -179,20 +171,17 @@ module.exports = function(){
 
             while (matches = rInclude.exec(content.substr(start))) {
 
-                required    = matches[2];
+                required    = resolvePath(matches[2], [base]);
 
-                if (required.indexOf(".js") == -1) {
-                    start += required.length;
+                if (required === true) {
+                    start += matches[2].length;
                     continue;
+                }
+                else if (required === false) {
+                    throw matches[2] + " required in " + self.path + " does not exist";
                 }
 
                 content     = content.replace(matches[1], "");
-                required    = path.normalize(base + required);
-
-                if (!isFile(required)) {
-                    throw required + " required in " + self.path + " does not exist";
-                }
-
                 required    = getOrCreate(required);
 
                 if (required.doesRequire(self.path)) {

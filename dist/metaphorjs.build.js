@@ -6,74 +6,6 @@ var MetaphorJs = {
 };
 
 
-var fs = require("fs");
-
-var isFile = function(filePath) {
-    return fs.existsSync(filePath) && fs.lstatSync(filePath).isFile();
-};
-
-
-
-
-var isDir = function(dirPath) {
-    return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
-};
-
-var path = require("path");
-
-var getFileList = function(directory, ext) {
-
-    var fileList,
-        filePath,
-        levels = 0,
-        files = [];
-
-    if (directory.substr(directory.length - 1) == "*") {
-        levels++;
-    }
-    if (directory.substr(directory.length - 2) == "**") {
-        levels++;
-    }
-
-    if (levels) {
-        directory = directory.substr(0, directory.length - (levels + 1));
-    }
-    directory = path.normalize(directory);
-
-    var readDir = function(dir) {
-        fileList    = fs.readdirSync(dir);
-
-        fileList.forEach(function(filename) {
-            filePath = path.normalize(dir + "/" + filename);
-
-            if (isFile(filePath)) {
-                if (!ext) {
-                    files.push(filePath);
-                }
-                else if (typeof ext == "string" && path.extname(filePath).substr(1) == ext) {
-                    files.push(filePath);
-                }
-                else if (path.extname(filePath).substr(1).match(ext)) {
-                    files.push(filePath);
-                }
-            }
-            else if (isDir(filePath) && levels > 1) {
-                readDir(filePath);
-            }
-        });
-    };
-
-
-    if (levels > 0 || isDir(directory)) {
-        readDir(directory);
-    }
-    else {
-        files    = [directory];
-    }
-
-    return files;
-};
-
 var toString = Object.prototype.toString;
 
 var undf = undefined;
@@ -155,7 +87,8 @@ function isArray(value) {
 };
 
 
-
+var fs              = require("fs"),
+    path            = require("path");
 
 
 var JsonFile = function(){
@@ -279,6 +212,74 @@ var JsonFile = function(){
     return JsonFile;
 
 }();
+
+
+
+
+var isDir = function(dirPath) {
+    return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+};
+
+
+
+var resolvePath = function(toResolve, locations) {
+
+    if (toResolve.indexOf("./") !== 0 &&
+        toResolve.indexOf("../") !== 0 &&
+        toResolve.indexOf("*") == -1 &&
+        toResolve.indexOf("/") == -1 &&
+        toResolve.indexOf(".js") != toResolve.length - 3) {
+        return true;
+    }
+
+    locations = locations || [];
+
+    if (process.env.METAPHORJS_PATH) {
+        locations.push(process.env.METAPHORJS_PATH);
+    }
+    if (process.env.NODE_PATH) {
+        locations = locations.concat(process.env.NODE_PATH.split(path.delimiter));
+    }
+
+    var norm = toResolve,
+        inx,
+        i, l,
+        loc,
+        dirMode = false;
+
+    while ((inx = norm.indexOf('*')) != -1) {
+        norm = norm.substr(0, inx);
+        norm = norm.split('/');
+        norm.pop();
+        norm = norm.join("/");
+        dirMode = true;
+    }
+
+    for (i = 0, l = locations.length; i < l; i++) {
+        loc = locations[i];
+
+        if (loc.substr(loc.length - 1) != '/') {
+            loc += '/';
+        }
+
+        if (fs.existsSync(loc + norm)) {
+            if (dirMode || !isDir(loc + norm)) {
+                return path.normalize(loc + norm) + toResolve.replace(norm, "");
+            }
+        }
+    }
+
+    try {
+        var resolved = require.resolve(toResolve);
+        if (resolved == toResolve) {
+            return true;
+        }
+        return resolved;
+    }
+    catch (thrown) {}
+
+    return false;
+};
 
 
 
@@ -410,7 +411,6 @@ var File = function(){
                 content     = fs.readFileSync(self.path).toString(),
                 base        = self.base,
                 start       = 0,
-                mjsPath     = process.env.METAPHORJS_PATH,
                 required,
                 matches;
 
@@ -420,21 +420,14 @@ var File = function(){
 
             while (matches = rRequires.exec(content.substr(start))) {
 
-                required    = matches[2];
+                required    = resolvePath(matches[2], [base]);
 
-                if (required.indexOf(".js") == -1) {
-                    start += matches.index + required.length;
+                if (required === true) {
+                    start += matches.index + matches[2].length;
                     continue;
                 }
-
-                if (isFile(path.normalize(base + required))) {
-                    required    = path.normalize(base + required);
-                }
-                else if (isFile(mjsPath +"/"+ required)) {
-                    required    = mjsPath +"/"+ required;
-                }
-                else {
-                    throw required + " required in " + self.path + " does not exist";
+                else if (required === false) {
+                    throw matches[2] + " required in " + self.path + " does not exist";
                 }
 
                 content     = content.replace(matches[0], "");
@@ -458,20 +451,17 @@ var File = function(){
 
             while (matches = rInclude.exec(content.substr(start))) {
 
-                required    = matches[2];
+                required    = resolvePath(matches[2], [base]);
 
-                if (required.indexOf(".js") == -1) {
-                    start += required.length;
+                if (required === true) {
+                    start += matches[2].length;
                     continue;
+                }
+                else if (required === false) {
+                    throw matches[2] + " required in " + self.path + " does not exist";
                 }
 
                 content     = content.replace(matches[1], "");
-                required    = path.normalize(base + required);
-
-                if (!isFile(required)) {
-                    throw required + " required in " + self.path + " does not exist";
-                }
-
                 required    = getOrCreate(required);
 
                 if (required.doesRequire(self.path)) {
@@ -578,28 +568,70 @@ var File = function(){
 
 
 
-var firstFile = function() {
+var isFile = function(filePath) {
+    return fs.existsSync(filePath) && fs.lstatSync(filePath).isFile();
+};
 
-    var l = arguments.length,
-        i,
-        path,
-        inx;
 
-    for (i = 0; i < l; i++) {
-        path = arguments[i];
-        if ((inx = path.indexOf('*')) != -1) {
-            path = path.substr(0, inx);
-            path = path.split('/');
-            path.pop();
-            path = path.join("/");
-        }
-        if (isFile(path)) {
-            return arguments[i];
-        }
+
+var getFileList = function(directory, ext) {
+
+    var fileList,
+        filePath,
+        levels = 0,
+        files = [];
+
+    if (!directory) {
+        return [];
     }
 
-    return arguments[0];
+
+    if (directory.substr(directory.length - 1) == "*") {
+        levels++;
+    }
+    if (directory.substr(directory.length - 2) == "**") {
+        levels++;
+    }
+
+    if (levels) {
+        directory = directory.substr(0, directory.length - (levels + 1));
+    }
+    directory = path.normalize(directory);
+
+    var readDir = function(dir) {
+        fileList    = fs.readdirSync(dir);
+
+        fileList.forEach(function(filename) {
+            filePath = path.normalize(dir + "/" + filename);
+
+            if (isFile(filePath)) {
+                if (!ext) {
+                    files.push(filePath);
+                }
+                else if (typeof ext == "string" && path.extname(filePath).substr(1) == ext) {
+                    files.push(filePath);
+                }
+                else if (path.extname(filePath).substr(1).match(ext)) {
+                    files.push(filePath);
+                }
+            }
+            else if (isDir(filePath) && levels > 1) {
+                readDir(filePath);
+            }
+        });
+    };
+
+
+    if (levels > 0 || isDir(directory)) {
+        readDir(directory);
+    }
+    else {
+        files    = [directory];
+    }
+
+    return files;
 };
+
 
 
 
@@ -693,6 +725,7 @@ Build.prototype = {
             allReplaces = {},
 
             addFile = function(path, props, temporary) {
+
                 if (!all[path]) {
                     all[path] = props || {};
                 }
@@ -750,8 +783,7 @@ Build.prototype = {
                     replace = mixin.replace || [],
                     mixins  = mixin.mixins || [],
                     base    = jsonFile.base,
-                    ext     = mixin.extension || "js",
-                    mjsPath = process.env.METAPHORJS_PATH;
+                    ext     = mixin.extension || "js";
 
 
                 mixins.forEach(function(item){
@@ -759,31 +791,20 @@ Build.prototype = {
                         processMixin(getMixin(jsonFile, item), jsonFile);
                     }
                     else {
-                        var json = JsonFile.get(
-                            firstFile(
-                                base + item[0],
-                                mjsPath + "/" + item[0]
-                            )
-                        );
+                        var json = JsonFile.get(resolvePath(item[0], [base]));
                         processMixin(getMixin(json, item[1]), json);
                     }
                 });
 
                 omit.forEach(function(omitFile){
-                    var list = getFileList(
-                        firstFile(
-                            base + omitFile,
-                            mjsPath + "/" + omitFile
-                        )
-                        , ext);
-                    list.forEach(function(omitFile){
-                        allOmits[omitFile] = true;
-                    });
+                    getFileList(resolvePath(omitFile, [base]), ext)
+                        .forEach(function(omitFile){
+                            allOmits[omitFile] = true;
+                        });
                 });
 
                 replace.forEach(function(row){
-                    allReplaces[firstFile(path.normalize(base + row[0]), mjsPath + '/' + row[0])]
-                        = firstFile(path.normalize(base + row[1]), mjsPath +'/'+ row[1]);
+                    allReplaces[resolvePath(row[0], [base])] = resolvePath(row[1], [base]);
                 });
 
                 files.forEach(function(file){
@@ -798,11 +819,8 @@ Build.prototype = {
                 }
 
                 var file    = fileDef[0],
-                    mjsPath = process.env.METAPHORJS_PATH,
-                    list,
                     json,
                     ext;
-
 
                 // mixin
                 if (file.indexOf('.') == -1 && file.indexOf('*') == -1) {
@@ -814,12 +832,7 @@ Build.prototype = {
                     }
                 }
                 else if (path.extname(file) == ".json") {
-                    json = JsonFile.get(
-                        firstFile(
-                            jsonFile.base + file,
-                            mjsPath + "/" + file
-                        )
-                    );
+                    json = JsonFile.get(resolvePath(file, [jsonFile.base]));
                     if (fileDef[2]) {
                         renderMixin(json, fileDef[1], fileDef[2]);
                     }
@@ -829,13 +842,10 @@ Build.prototype = {
                 }
                 else {
                     ext = path.extname(file).substr(1) || jsonFile.extension || "js";
-                    list = getFileList(firstFile(
-                        jsonFile.base + file,
-                        mjsPath + "/" + file
-                    ), ext);
-                    list.forEach(function(file){
-                        addFile(file, fileDef[1]);
-                    });
+                    getFileList(resolvePath(file, [jsonFile.base]), ext)
+                        .forEach(function(file){
+                            addFile(file, fileDef[1]);
+                        });
                 }
             };
 
@@ -959,9 +969,15 @@ var eachProject = function(fn) {
 
 var child           = require("child_process"),
     
+
     
     
     
+    
+
+    
+    
+
     Promise         = require("metaphorjs-promise");
 
 
@@ -1511,6 +1527,8 @@ Git.prototype = {
 
 
 var parseArgs = require("minimist");
+
+
 
 
 var Project = function(){

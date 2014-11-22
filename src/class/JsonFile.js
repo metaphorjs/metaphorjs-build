@@ -2,8 +2,8 @@
 
 var fs              = require("fs"),
     path            = require("path"),
-    isString        = require("../../../metaphorjs/src/func/isString.js"),
-    isArray         = require("../../../metaphorjs/src/func/isArray.js");
+    isString        = require("metaphorjs/src/func/isString.js"),
+    isArray         = require("metaphorjs/src/func/isArray.js");
 
 
 module.exports = function(){

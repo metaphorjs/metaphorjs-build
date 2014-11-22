@@ -2,13 +2,16 @@
 var fs              = require("fs"),
     child           = require("child_process"),
     path            = require("path"),
+
     File            = require("./File.js"),
-    isFile          = require("../../../metaphorjs/src/func/fs/isFile.js"),
     eachProject     = require("../func/eachProject.js"),
-    Promise         = require("metaphorjs-promise"),
     Build           = require("./Build.js"),
     JsonFile        = require("./JsonFile.js"),
-    isArray         = require("../../../metaphorjs/src/func/isArray.js");
+
+    isFile          = require("metaphorjs/src/func/fs/isFile.js"),
+    isArray         = require("metaphorjs/src/func/isArray.js"),
+
+    Promise         = require("metaphorjs-promise");
 
 
 

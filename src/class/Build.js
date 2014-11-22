@@ -1,9 +1,12 @@
 
-var getFileList = require("../../../metaphorjs/src/func/fs/getFileList.js"),
-    path = require("path"),
+var path = require("path"),
+
     JsonFile = require("./JsonFile.js"),
     File = require("./File.js"),
-    firstFile = require("../func/firstFile.js");
+    resolvePath = require("../func/resolvePath.js"),
+
+    getFileList = require("metaphorjs/src/func/fs/getFileList.js");
+
 
 var Build = function(jsonFile, name) {
 
@@ -95,6 +98,7 @@ Build.prototype = {
             allReplaces = {},
 
             addFile = function(path, props, temporary) {
+
                 if (!all[path]) {
                     all[path] = props || {};
                 }
@@ -152,8 +156,7 @@ Build.prototype = {
                     replace = mixin.replace || [],
                     mixins  = mixin.mixins || [],
                     base    = jsonFile.base,
-                    ext     = mixin.extension || "js",
-                    mjsPath = process.env.METAPHORJS_PATH;
+                    ext     = mixin.extension || "js";
 
 
                 mixins.forEach(function(item){
@@ -161,31 +164,20 @@ Build.prototype = {
                         processMixin(getMixin(jsonFile, item), jsonFile);
                     }
                     else {
-                        var json = JsonFile.get(
-                            firstFile(
-                                base + item[0],
-                                mjsPath + "/" + item[0]
-                            )
-                        );
+                        var json = JsonFile.get(resolvePath(item[0], [base]));
                         processMixin(getMixin(json, item[1]), json);
                     }
                 });
 
                 omit.forEach(function(omitFile){
-                    var list = getFileList(
-                        firstFile(
-                            base + omitFile,
-                            mjsPath + "/" + omitFile
-                        )
-                        , ext);
-                    list.forEach(function(omitFile){
-                        allOmits[omitFile] = true;
-                    });
+                    getFileList(resolvePath(omitFile, [base]), ext)
+                        .forEach(function(omitFile){
+                            allOmits[omitFile] = true;
+                        });
                 });
 
                 replace.forEach(function(row){
-                    allReplaces[firstFile(path.normalize(base + row[0]), mjsPath + '/' + row[0])]
-                        = firstFile(path.normalize(base + row[1]), mjsPath +'/'+ row[1]);
+                    allReplaces[resolvePath(row[0], [base])] = resolvePath(row[1], [base]);
                 });
 
                 files.forEach(function(file){
@@ -200,11 +192,8 @@ Build.prototype = {
                 }
 
                 var file    = fileDef[0],
-                    mjsPath = process.env.METAPHORJS_PATH,
-                    list,
                     json,
                     ext;
-
 
                 // mixin
                 if (file.indexOf('.') == -1 && file.indexOf('*') == -1) {
@@ -216,12 +205,7 @@ Build.prototype = {
                     }
                 }
                 else if (path.extname(file) == ".json") {
-                    json = JsonFile.get(
-                        firstFile(
-                            jsonFile.base + file,
-                            mjsPath + "/" + file
-                        )
-                    );
+                    json = JsonFile.get(resolvePath(file, [jsonFile.base]));
                     if (fileDef[2]) {
                         renderMixin(json, fileDef[1], fileDef[2]);
                     }
@@ -231,13 +215,10 @@ Build.prototype = {
                 }
                 else {
                     ext = path.extname(file).substr(1) || jsonFile.extension || "js";
-                    list = getFileList(firstFile(
-                        jsonFile.base + file,
-                        mjsPath + "/" + file
-                    ), ext);
-                    list.forEach(function(file){
-                        addFile(file, fileDef[1]);
-                    });
+                    getFileList(resolvePath(file, [jsonFile.base]), ext)
+                        .forEach(function(file){
+                            addFile(file, fileDef[1]);
+                        });
                 }
             };
 

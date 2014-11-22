@@ -1,8 +1,10 @@
 
 var cp = require("child_process"),
     Promise = require("metaphorjs-promise"),
-    isDir = require("../../../metaphorjs/src/func/fs/isDir.js"),
-    passthru = require("../func/passthru.js");
+
+    passthru = require("../func/passthru.js"),
+
+    isDir = require("metaphorjs/src/func/fs/isDir.js");
 
 var Git = function(location) {
 

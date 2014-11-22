@@ -3,12 +3,16 @@ var path = require("path"),
     fs = require("fs"),
     cp = require("child_process"),
     Promise = require("metaphorjs-promise"),
-    Git = require("./Git.js"),
-    isFile = require("../../../metaphorjs/src/func/fs/isFile.js"),
     parseArgs = require("minimist"),
+
+    Git = require("./Git.js"),
     passthru = require("../func/passthru.js"),
     eachProject = require("../func/eachProject.js"),
-    Builder = require("./Builder.js");
+    Builder = require("./Builder.js"),
+
+    isFile = require("metaphorjs/src/func/fs/isFile.js");
+
+
 
 
 module.exports = function(){
