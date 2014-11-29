@@ -1495,7 +1495,7 @@ Git.prototype = {
                 deferred.reject(err);
             }
             else {
-                deferred.resolve(stdout.indexOf("modified:") != -1);
+                deferred.resolve(stdout.indexOf("modified:") != -1 || stdout.indexOf("Untracked files:") != -1);
             }
         });
 
