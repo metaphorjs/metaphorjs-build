@@ -290,6 +290,10 @@ Builder.prototype   = {
             args.push("--create_source_map=" + target + ".map");
         }
 
+        //if (bld.Xmx) {
+            //args.push("--Xmx=" + bld.Xmx);
+        //}
+
         proc    = child.spawn("ccjs", args);
 
         proc.stderr.pipe(process.stderr);
