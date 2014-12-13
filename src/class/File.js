@@ -218,6 +218,9 @@ module.exports = function(){
 
             if (as == "*") {
                 as = path.basename(self.path, ".js");
+                if (as.indexOf(".") != -1) {
+                    return;
+                }
             }
 
             if (self.as.indexOf(as) == -1) {
