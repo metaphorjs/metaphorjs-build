@@ -112,7 +112,6 @@ module.exports = function(){
                                 content = content.replace("module.exports", as.join(" = "));
                             }
                             else {
-
                                 content = content.replace("module.exports", "var " + as[0]);
                             }
                         }
@@ -223,7 +222,7 @@ module.exports = function(){
                 }
             }
 
-            if (self.as.indexOf(as) == -1) {
+            if (as && self.as.indexOf(as) == -1) {
                 self.as.push(as);
             }
         },

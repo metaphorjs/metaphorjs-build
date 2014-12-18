@@ -392,7 +392,6 @@ var File = function(){
                                 content = content.replace("module.exports", as.join(" = "));
                             }
                             else {
-
                                 content = content.replace("module.exports", "var " + as[0]);
                             }
                         }
@@ -503,7 +502,7 @@ var File = function(){
                 }
             }
 
-            if (self.as.indexOf(as) == -1) {
+            if (as && self.as.indexOf(as) == -1) {
                 self.as.push(as);
             }
         },
