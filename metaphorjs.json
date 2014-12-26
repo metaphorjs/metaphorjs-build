@@ -11,7 +11,7 @@
             "target": "dist/metaphorjs.build.js",
             "auto": true,
             "files": [
-                ["../metaphorjs/src/MetaphorJs.js", {"as": "MetaphorJs"}],
+                ["metaphorjs/src/MetaphorJs.js", {"as": "MetaphorJs"}],
                 ["src/**", {"as": "*"}]
             ],
             "expose": [
@@ -22,7 +22,7 @@
                 "Git",
                 "Project"
             ],
-            "exports": "MetaphorJs"
+            "exports": true
         }
     }
 }

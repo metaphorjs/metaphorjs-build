@@ -1093,9 +1093,11 @@ Builder.prototype   = {
 
             var createdNs = {};
 
-            var exposeIn = bld.exposeIn || "MetaphorJs";
+            var exposeIn = bld.exposeIn || "MetaphorJsExports";
 
-            createdNs[exposeIn] = true;
+            content += "var " + exposeIn + " = {};\n";
+
+            //createdNs[exposeIn] = true;
 
             if (bld.expose == "all") {
                 var names = self.collectNames();
@@ -1149,10 +1151,13 @@ Builder.prototype   = {
 
         if (bld.global) {
             content += "typeof global != \"undefined\" ? " +
-                       "(global['MetaphorJs'] = MetaphorJs) : (window['MetaphorJs'] = MetaphorJs);\n";
+                       "(global['MetaphorJs'] = "+ exposeIn +") : (window['MetaphorJs'] = "+ exposeIn +");\n";
         }
 
         if (bld.exports) {
+            if (bld.exports === true) {
+                bld.exports = exposeIn;
+            }
             if (bld.wrap) {
                 content += "return " + bld.exports + ";\n";
             }
@@ -1905,10 +1910,11 @@ var Project = function(){
     return Project;
 
 }();
-MetaphorJs['Build'] = Build;
-MetaphorJs['Builder'] = Builder;
-MetaphorJs['File'] = File;
-MetaphorJs['JsonFile'] = JsonFile;
-MetaphorJs['Git'] = Git;
-MetaphorJs['Project'] = Project;
-module.exports = MetaphorJs;
+var MetaphorJsExports = {};
+MetaphorJsExports['Build'] = Build;
+MetaphorJsExports['Builder'] = Builder;
+MetaphorJsExports['File'] = File;
+MetaphorJsExports['JsonFile'] = JsonFile;
+MetaphorJsExports['Git'] = Git;
+MetaphorJsExports['Project'] = Project;
+module.exports = MetaphorJsExports;

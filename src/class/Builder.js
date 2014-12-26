@@ -124,9 +124,11 @@ Builder.prototype   = {
 
             var createdNs = {};
 
-            var exposeIn = bld.exposeIn || "MetaphorJs";
+            var exposeIn = bld.exposeIn || "MetaphorJsExports";
 
-            createdNs[exposeIn] = true;
+            content += "var " + exposeIn + " = {};\n";
+
+            //createdNs[exposeIn] = true;
 
             if (bld.expose == "all") {
                 var names = self.collectNames();
@@ -180,10 +182,13 @@ Builder.prototype   = {
 
         if (bld.global) {
             content += "typeof global != \"undefined\" ? " +
-                       "(global['MetaphorJs'] = MetaphorJs) : (window['MetaphorJs'] = MetaphorJs);\n";
+                       "(global['MetaphorJs'] = "+ exposeIn +") : (window['MetaphorJs'] = "+ exposeIn +");\n";
         }
 
         if (bld.exports) {
+            if (bld.exports === true) {
+                bld.exports = exposeIn;
+            }
             if (bld.wrap) {
                 content += "return " + bld.exports + ";\n";
             }
