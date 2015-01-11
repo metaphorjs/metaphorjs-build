@@ -212,7 +212,7 @@ module.exports = function(){
                 })
                 // push to github
                 .then(function(){
-                    if (deferred.isPending() && options.p) {
+                    if ((deferred.isPending() && options.p) || options.forcePush) {
                         console.log("publishing to git");
                         var funcs = [],
                             push  = self.config.push;
