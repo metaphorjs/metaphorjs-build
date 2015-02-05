@@ -7,14 +7,19 @@ module.exports = function(grunt) {
 
     grunt.registerMultiTask("mjs-compile", function(){
 
-        var opt     = this.options(),
-            Builder = require("./dist/metaphorjs.build.js").Builder;
+        try {
+            var opt = this.options(),
+                Builder = require("./dist/metaphorjs.build.js").Builder;
 
-        if (opt.all) {
-            Builder.compileAll(opt.auto || false);
+            if (opt.all) {
+                Builder.compileAll(opt.auto || false);
+            }
+            else {
+                Builder.compile(opt.build || null, opt.jsonFile || null);
+            }
         }
-        else {
-            Builder.compile(opt.build || null, opt.jsonFile || null);
+        catch (thrownErr) {
+            grunt.warn(thrownErr);
         }
     });
 
