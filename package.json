@@ -15,8 +15,7 @@
     },
     "dependencies": {
         "closurecompiler": "*",
-        "metaphorjs-promise": "^1.0.7",
-        "minimist": "^1.1.0"
+        "minimist": "*"
     },
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
@@ -25,6 +24,7 @@
         "mjs-build": "bin/build.js",
         "mjs-compile": "bin/compile.js",
         "mjs-publish": "bin/publish.js",
-        "mjs-test": "bin/test.js"
+        "mjs-test": "bin/test.js",
+        "mjs": "bin/mjs.js"
     }
 }
