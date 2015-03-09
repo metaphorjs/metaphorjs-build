@@ -15,9 +15,6 @@ if (args.all) {
 }
 else {
 
-    var jsonFile = args._.pop(),
-        name = args._.pop();
-
     require("./../dist/metaphorjs.build.js")
         .Builder
         .compile(args._[0], args._[1]);

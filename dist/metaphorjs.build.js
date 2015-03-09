@@ -1242,7 +1242,9 @@ Builder.prototype   = {
         var self        = this,
             bld         = self.bld,
             source      = path.normalize(self.jsonFile.base + bld.target),
-            target      = source.replace(/\.js$/, ".min.js"),
+            target      = bld.compileTarget ?
+                            path.normalize(self.jsonFile.base + bld.compileTarget) :
+                            source.replace(/\.js$/, ".min.js"),
             args        = [],
             proc,
             out;
@@ -1269,7 +1271,9 @@ Builder.prototype   = {
             //args.push("--Xmx=" + bld.Xmx);
         //}
 
-        proc    = child.spawn("ccjs", args);
+        var ccjs    = require.resolve("closurecompiler").replace("ClosureCompiler.js", "bin/ccjs");
+
+        proc    = child.spawn(ccjs, args);
 
         proc.stderr.pipe(process.stderr);
         proc.stdout.pipe(out);
