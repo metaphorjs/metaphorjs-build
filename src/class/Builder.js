@@ -260,9 +260,17 @@ Builder.prototype   = {
             if (bld.exports || wrap.exported) {
                 content = "module" + ".exports = " + content;
             }
+
+            if (bld.shebang) {
+                content = bld.shebang + "\n" + content;
+            }
         }
 
         fs.writeFileSync(target, content);
+
+        if (bld.chmod) {
+            fs.chmodSync(target, bld.chmod);
+        }
     },
 
 

@@ -75,6 +75,11 @@ module.exports = function(){
                 match,
                 name, funcName;
 
+            if (!as.length) {
+                self.addAs("*");
+                as          = self.as.slice();
+            }
+
             options = options || {};
 
             if (!options.keepExports && content.indexOf("module.exports") != -1) {

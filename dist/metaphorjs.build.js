@@ -355,6 +355,11 @@ var File = function(){
                 match,
                 name, funcName;
 
+            if (!as.length) {
+                self.addAs("*");
+                as          = self.as.slice();
+            }
+
             options = options || {};
 
             if (!options.keepExports && content.indexOf("module.exports") != -1) {
@@ -1230,9 +1235,17 @@ Builder.prototype   = {
             if (bld.exports || wrap.exported) {
                 content = "module" + ".exports = " + content;
             }
+
+            if (bld.shebang) {
+                content = bld.shebang + "\n" + content;
+            }
         }
 
         fs.writeFileSync(target, content);
+
+        if (bld.chmod) {
+            fs.chmodSync(target, bld.chmod);
+        }
     },
 
 
