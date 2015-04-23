@@ -75,10 +75,10 @@ module.exports = function(){
                 match,
                 name, funcName;
 
-            if (!as.length) {
-                self.addAs("*");
-                as          = self.as.slice();
-            }
+            //if (!as.length) {
+            //    self.addAs("*");
+            //    as          = self.as.slice();
+            //}
 
             options = options || {};
 
@@ -222,7 +222,7 @@ module.exports = function(){
 
             if (as == "*") {
                 as = path.basename(self.path, ".js");
-                if (as.indexOf(".") != -1) {
+                if (as.indexOf(".") != -1 || as.indexOf("-") != -1) {
                     return;
                 }
             }
