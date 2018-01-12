@@ -26,7 +26,8 @@ module.exports = function(toResolve, locations) {
         inx,
         i, l,
         loc,
-        dirMode = false;
+        dirMode = false,
+        abs = norm.substr(0, 1) == "/";
 
     while ((inx = norm.indexOf('*')) != -1) {
         norm = norm.substr(0, inx);
@@ -34,6 +35,14 @@ module.exports = function(toResolve, locations) {
         norm.pop();
         norm = norm.join("/");
         dirMode = true;
+    }
+
+    if (abs) {
+        if (fs.existsSync(norm)) {
+            if (dirMode || !isDir(norm)) {
+                return path.normalize(norm) + toResolve.replace(norm, "");
+            }
+        }
     }
 
     for (i = 0, l = locations.length; i < l; i++) {

@@ -16,6 +16,7 @@ var Build = function(jsonFile, name) {
     self.jsonFile       = jsonFile;
     self.files          = [];
     self.fileOptions    = {};
+    self.templates      = [];
 
     var raw = typeof name == "string" ?
                 jsonFile.build[name] || jsonFile.mixin[name] :
@@ -48,6 +49,11 @@ Build.prototype = {
      * @type {[]}
      */
     files: null,
+
+    /**
+     * @type {[]}
+     */
+    templates: null,
 
     /**
      * @type {[]}
@@ -93,6 +99,8 @@ Build.prototype = {
 
         var self        = this,
             all         = {},
+            allTpls     = {},
+            allTplsCnt  = 0,
             allFiles    = [],
             allOmits    = {},
             allReplaces = {},
@@ -129,6 +137,13 @@ Build.prototype = {
                 }
             },
 
+            addTplFile = function(path, props) {
+                if (!allTpls[path]) {
+                    allTpls[path] = props || {};
+                    allTplsCnt++;
+                }
+            },
+
             getMixin = function(jsonFile, name) {
                 return jsonFile.mixin[name] || {};
             },
@@ -155,6 +170,7 @@ Build.prototype = {
                     omit    = mixin.omit || [],
                     replace = mixin.replace || [],
                     mixins  = mixin.mixins || [],
+                    tpls    = mixin.templates || [],
                     base    = jsonFile.base,
                     ext     = mixin.extension || "js";
 
@@ -183,6 +199,26 @@ Build.prototype = {
                 files.forEach(function(file){
                     processFileItem(file, jsonFile);
                 });
+
+                tpls.forEach(function(file){
+                    processTplItem(file, jsonFile);
+                });
+            },
+
+            processTplItem = function(fileDef, jsonFile) {
+
+                if (typeof fileDef == "string") {
+                    fileDef = [fileDef];
+                }
+
+                var file    = fileDef[0],
+                    ext;
+
+                ext = path.extname(file).substr(1) || /^html|tpl$/;
+                getFileList(resolvePath(file, [jsonFile.base]), ext)
+                    .forEach(function(file){
+                        addTplFile(file, fileDef[1]);
+                    });
             },
 
             processFileItem = function(fileDef, jsonFile){
@@ -242,6 +278,7 @@ Build.prototype = {
         self.allOmits = allOmits;
         self.allReplaces = allReplaces;
         self.files = allFiles;
+        self.templates = allTplsCnt > 0 ? allTpls : null;
     },
 
     prepareBuildList: function() {
@@ -283,7 +320,31 @@ Build.prototype = {
             processFile(File.getOrCreate(filePath[0]));
         });
 
-        var options = self.fileOptions;
+        var options = self.fileOptions,
+            allAliases = {};
+        
+        var addAlias = function(file, as) {
+
+            if (as == "*") {
+                as = file.getDefaultAlias();
+            }
+
+            if (!as) {
+                return;
+            }
+
+            // alias is already occupied
+            // in this build
+            if (allAliases[as] && allAliases[as] != file.path) {
+
+                throw "Non unique alias \"" + as + "\" Found in " +
+                        allAliases[as] + " and " + file.path;
+            }
+            else {
+                allAliases[as] = file.path;
+                file.addAs(as);
+            }
+        };
 
         buildList.forEach(function(filePath){
 
@@ -293,11 +354,13 @@ Build.prototype = {
             if (opt && opt.as) {
                 file = File.getOrCreate(filePath);
                 if (typeof opt.as == "string") {
-                    file.addAs(opt.as);
+                    //file.addAs(opt.as, allAliases);
+                    addAlias(file, opt.as);
                 }
                 else {
                     opt.as.forEach(function(as) {
-                        file.addAs(as);
+                        addAlias(file, as);
+                        //file.addAs(as, allAliases);
                     });
                 }
             }

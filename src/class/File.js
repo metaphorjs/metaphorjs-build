@@ -1,7 +1,8 @@
 
 var fs              = require("fs"),
     path            = require("path"),
-    resolvePath     = require("../func/resolvePath.js");
+    resolvePath     = require("../func/resolvePath.js"),
+    nextUid         = require("metaphorjs/src/func/nextUid.js");
 
 
 
@@ -35,11 +36,13 @@ module.exports = function(){
 
         var self    = this;
 
+        self.id         = "_f_" + nextUid();
         self.base       = path.dirname(filePath) + "/";
         self.path       = filePath;
         self.as         = [];
         self.requires   = [];
         self.requiredBy = [];
+        self.localRequires = [];
 
         self.reqNames   = {};
 
@@ -51,6 +54,7 @@ module.exports = function(){
 
     File.prototype = {
 
+        id: null,
         base: null,
         path: null,
         content: "",
@@ -60,6 +64,9 @@ module.exports = function(){
         processed: false,
         reqNames: null,
 
+        requiresUniqueAlias: false,
+        localRequires: null,
+        wrap: false,
         temporary: false,
 
         /**
@@ -81,6 +88,10 @@ module.exports = function(){
             //}
 
             options = options || {};
+
+            if (this.requiresUniqueAlias) {
+                as.push(this.id);
+            }
 
             if (!options.keepExports && content.indexOf("module.exports") != -1) {
 
@@ -122,6 +133,10 @@ module.exports = function(){
                         }
                     }
                 }
+
+                //if (this.wrap) {
+                //    content = "(function(){\n"+content+"\n}());";
+                //}
 
                 content = content.replace(rStrict, "");
             }
@@ -213,22 +228,46 @@ module.exports = function(){
             }
         },
 
+        addLocalRequired: function(desiredName, fileId) {
+            this.localRequires.push({
+                desiredName: desiredName,
+                fileId: fileId
+            })
+        },
+
         addRequiredBy: function(file) {
             this.requiredBy.push(file);
+        },
+
+
+        getDefaultAlias: function() {
+            var as = path.basename(this.path, ".js");
+            if (as.indexOf(".") != -1 || as.indexOf("-") != -1) {
+                return null;
+            }
+            return as;
         },
 
         addAs: function(as) {
             var self = this;
 
             if (as == "*") {
-                as = path.basename(self.path, ".js");
-                if (as.indexOf(".") != -1 || as.indexOf("-") != -1) {
+                as = self.getDefaultAlias();
+                if (!as) {
                     return;
                 }
             }
 
             if (as && self.as.indexOf(as) == -1) {
                 self.as.push(as);
+            }
+        },
+
+        removeAs: function(as) {
+            var self = this,
+                inx;
+            if ((inx = self.as.indexOf(as)) != -1) {
+                self.as.splice(inx,1);
             }
         },
 
@@ -246,6 +285,10 @@ module.exports = function(){
                     console.log("Unused requirement " + name + " in " + self.path);
                 }
             }
+        },
+
+        needsWrapping: function() {
+
         }
     };
 

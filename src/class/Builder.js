@@ -10,6 +10,10 @@ var fs              = require("fs"),
 
     isFile          = require("metaphorjs/src/func/fs/isFile.js"),
     isArray         = require("metaphorjs/src/func/isArray.js"),
+    trim            = require("metaphorjs/src/func/trim.js"),
+
+    TextRenderer    = require("metaphorjs/src/class/TextRenderer.js"),
+    Scope           = require("metaphorjs/src/lib/Scope.js"),
 
     Promise         = require("metaphorjs-promise");
 
@@ -42,14 +46,85 @@ Builder.prototype   = {
     bld:            null,
     projectFile:    null,
 
+    templates:      null,
+    gettersCode:    null,
+    gettersCodes:   null,
+
     build:          function() {
 
         var self    = this,
             bld     = self.bld;
 
+        if (bld.templates) {
+            self.prepareTemplates();
+            //console.log(bld.templates)
+        }
+
         if (bld.files.length && bld.target) {
             self.concat();
         }
+    },
+
+    prepareTemplates: function() {
+
+        var self = this,
+            scope = new Scope,
+            boundary = '##--##',
+            saveBoundary = '--##--',
+            filePath,
+            tplCfg,
+            fns = [],
+            codes = [],
+            tpls = {};
+
+
+        for (filePath in self.bld.templates) {
+
+            tplCfg = self.bld.templates[filePath];
+
+            var tpl = trim(fs.readFileSync(filePath, {encoding: "utf-8"})),
+                tplUrl;
+
+            if (!tpl) {
+                continue;
+            }
+
+            tplUrl = filePath;
+
+            if (tplCfg.root) {
+                tplUrl = tplUrl.replace(tplCfg.root, "");
+            }
+            if (tplCfg.prefix) {
+                tplUrl = tplCfg.prefix + tplUrl;
+            }
+
+            var tr = new TextRenderer(scope, tpl, null, null, null, boundary, "mock");
+
+            tr.watchers.forEach(function(w, inx){
+                var cfg = w.getConfig();
+                if (cfg.type == "expr" && !cfg.hasPipes && !cfg.hasInputPipes) {
+                    var nextInx = fns.length;
+                    fns.push(cfg.getter);
+                    codes.push(cfg.code);
+                    tpl = tr.processed.replace(
+                        boundary + inx + boundary,
+                        saveBoundary + nextInx + saveBoundary
+                    );
+                }
+                else {
+                    tpl = tr.processed.replace(
+                        boundary + inx + boundary,
+                        '{{ ' + cfg.code + ' }}'
+                    );
+                }
+
+                tpls[tplUrl] = tpl;
+            });
+        }
+
+        self.templates = tpls;
+        self.gettersCode = "[" + fns.join(", ") + "]";
+        self.gettersCodes = codes;
     },
 
     concat:        function() {
@@ -58,6 +133,8 @@ Builder.prototype   = {
             bld         = self.bld,
             target      = bld.specificTarget || path.normalize(self.jsonFile.base + bld.target),
             content     = "",
+            exposeIn,
+            exposedNames= [],
             file,
             fileOpt;
 
@@ -103,6 +180,14 @@ Builder.prototype   = {
             });
         }
 
+        content += "var __MetaphorJsPrebuilt = {};\n";
+
+        if (self.templates) {
+            content += "__MetaphorJsPrebuilt['__tpls'] = " + JSON.stringify(self.templates) + ";\n";
+            content += "__MetaphorJsPrebuilt['__tpl_getters'] = " + self.gettersCode + ";\n";
+            content += "__MetaphorJsPrebuilt['__tpl_getter_codes'] = " + JSON.stringify(self.gettersCodes) + ";\n";
+        }
+
         bld.buildList.forEach(function(filePath){
 
             if (!File.exists(filePath)) {
@@ -122,13 +207,12 @@ Builder.prototype   = {
 
         if (bld.expose) {
 
-            var createdNs = {};
+            var createdNs = {},
+                es6export = bld.es6export || false,
+                exportContent = "";
 
-            var exposeIn = bld.exposeIn || "MetaphorJsExports";
-
-            content += "var " + exposeIn + " = {};\n";
-
-            //createdNs[exposeIn] = true;
+            exposeIn = bld.exposeIn || "MetaphorJsExports";
+            exportContent += "var " + exposeIn + " = {};\n";
 
             if (bld.expose == "all") {
                 var names = self.collectNames();
@@ -137,7 +221,8 @@ Builder.prototype   = {
                         return;
                     }
                     if (name != exposeIn) {
-                        content += exposeIn + "['" + name + "'] = " + name + ";\n";
+                        exposedNames.push([name, name]);
+                        exportContent += exposeIn + "['" + name + "'] = " + name + ";\n";
                     }
                 });
             }
@@ -148,7 +233,8 @@ Builder.prototype   = {
                 bld.expose.forEach(function (varName) {
 
                     if (typeof varName == "string") {
-                        content += exposeIn + "['" + varName + "'] = " + varName + ";\n";
+                        exposedNames.push([varName, varName]);
+                        exportContent += exposeIn + "['" + varName + "'] = " + varName + ";\n";
                     }
                     else {
 
@@ -164,12 +250,16 @@ Builder.prototype   = {
                         }
 
                         if (!createdNs[ns]) {
-                            content += ns + " || (" + ns + " = {});\n";
+                            exportContent += ns + " || (" + ns + " = {});\n";
                         }
-                        content += ns + "['" + as + "'] = " + varName + ";\n";
+
+                        exposedNames.push([varName, as]);
+                        exportContent += ns + "['" + as + "'] = " + varName + ";\n";
                     }
                 });
             }
+
+            content += exportContent;
         }
 
         if (bld.append) {
@@ -198,7 +288,12 @@ Builder.prototype   = {
         }
 
         if (bld.returns) {
-            content += "return " + bld.returns + ";\n";
+            if (bld.es6export) {
+                content += "return " + exposeIn + ";\n";
+            }
+            else {
+                content += "return " + bld.returns + ";\n";
+            }
         }
 
         if (bld.define) {
@@ -260,9 +355,29 @@ Builder.prototype   = {
             if (bld.exports || wrap.exported) {
                 content = "module" + ".exports = " + content;
             }
+            if (bld.es6export) {
+                content = "var " + exposeIn + " = " + content;
+            }
 
             if (bld.shebang) {
                 content = bld.shebang + "\n" + content;
+            }
+        }
+
+        if (bld.es6export) {
+
+            exportContent = "";
+            exposeIn = bld.exposeIn || "MetaphorJsExports";
+            var es6exportList = [];
+
+            exposedNames.forEach(function (item) {
+                var as = item[1]; // key in exposedIn (this is all we care)
+                es6exportList.push(as);
+                content += "\nvar " + as + " = " + exposeIn + '.' + as + ';';
+            });
+
+            if (es6exportList.length > 0) {
+                content += "\n\nexport { " + es6exportList.join(", ") + " };\n";
             }
         }
 
