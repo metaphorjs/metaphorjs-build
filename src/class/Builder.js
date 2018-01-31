@@ -98,11 +98,13 @@ Builder.prototype   = {
                 tplUrl = tplCfg.prefix + tplUrl;
             }
 
-            var tr = new TextRenderer(scope, tpl, null, null, null, boundary, "mock");
+            //var tr = new TextRenderer(scope, tpl, null, null, null, boundary, "mock");
 
-            tr.watchers.forEach(function(w, inx){
+            tpls[tplUrl] = tpl;
+
+            /*tr.watchers.forEach(function(w, inx){
                 var cfg = w.getConfig();
-                if (cfg.type == "expr" && !cfg.hasPipes && !cfg.hasInputPipes) {
+                if (cfg.type === "expr" && !cfg.hasPipes && !cfg.hasInputPipes) {
                     var nextInx = fns.length;
                     fns.push(cfg.getter);
                     codes.push(cfg.code);
@@ -119,7 +121,7 @@ Builder.prototype   = {
                 }
 
                 tpls[tplUrl] = tpl;
-            });
+            });*/
         }
 
         self.templates = tpls;

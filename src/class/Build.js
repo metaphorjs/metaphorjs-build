@@ -18,7 +18,7 @@ var Build = function(jsonFile, name) {
     self.fileOptions    = {};
     self.templates      = [];
 
-    var raw = typeof name == "string" ?
+    var raw = typeof name === "string" ?
                 jsonFile.build[name] || jsonFile.mixin[name] :
                 name,
         key;
@@ -118,12 +118,12 @@ Build.prototype = {
                     else {
                         var key, oldVal;
                         for (key in props) {
-                            if (typeof oldProps[key] == "undefined") {
+                            if (typeof oldProps[key] === "undefined") {
                                 oldProps[key] = props[key];
                             }
-                            else if (key == "as") {
+                            else if (key === "as") {
                                 oldVal = oldProps[key];
-                                if (typeof oldVal == "string") {
+                                if (typeof oldVal === "string") {
                                     oldProps[key] = [oldVal];
                                 }
                                 oldProps[key].push(props[key]);
@@ -137,9 +137,16 @@ Build.prototype = {
                 }
             },
 
-            addTplFile = function(path, props) {
+            addTplFile = function(path, props, jsonFile) {
                 if (!allTpls[path]) {
-                    allTpls[path] = props || {};
+                    props = props || {};
+                    if (props.root) {
+                        props.root = resolvePath(props.root, [jsonFile.base], true);
+                        if (props.root.substr(props.root.length - 1) !== '/') {
+                            props.root += '/';
+                        }
+                    }
+                    allTpls[path] = props;
                     allTplsCnt++;
                 }
             },
@@ -154,7 +161,7 @@ Build.prototype = {
                     ext = raw.extension || "js",
                     tmp = "/tmp/mjs-build-tmp-" + (new Date).getTime() + "." + ext,
                     r = require,
-                    Builder = typeof Builder == "undefined" ? r("./Builder.js") : Builder;
+                    Builder = typeof Builder === "undefined" ? r("./Builder.js") : Builder;
 
                 raw.specificTarget = tmp;
 
@@ -176,7 +183,7 @@ Build.prototype = {
 
 
                 mixins.forEach(function(item){
-                    if (typeof item == "string") {
+                    if (typeof item === "string") {
                         processMixin(getMixin(jsonFile, item), jsonFile);
                     }
                     else {
@@ -207,7 +214,7 @@ Build.prototype = {
 
             processTplItem = function(fileDef, jsonFile) {
 
-                if (typeof fileDef == "string") {
+                if (typeof fileDef === "string") {
                     fileDef = [fileDef];
                 }
 
@@ -217,13 +224,13 @@ Build.prototype = {
                 ext = path.extname(file).substr(1) || /^html|tpl$/;
                 getFileList(resolvePath(file, [jsonFile.base]), ext)
                     .forEach(function(file){
-                        addTplFile(file, fileDef[1]);
+                        addTplFile(file, fileDef[1], jsonFile);
                     });
             },
 
             processFileItem = function(fileDef, jsonFile){
 
-                if (typeof fileDef == "string") {
+                if (typeof fileDef === "string") {
                     fileDef = [fileDef];
                 }
 
@@ -232,7 +239,7 @@ Build.prototype = {
                     ext;
 
                 // mixin
-                if (file.indexOf('.') == -1 && file.indexOf('*') == -1) {
+                if (file.indexOf('.') === -1 && file.indexOf('*') === -1) {
                     if (fileDef[1]) {
                         renderMixin(jsonFile, file, fileDef[1]);
                     }
@@ -240,7 +247,7 @@ Build.prototype = {
                         processMixin(getMixin(jsonFile, file), jsonFile);
                     }
                 }
-                else if (path.extname(file) == ".json") {
+                else if (path.extname(file) === ".json") {
                     json = JsonFile.get(resolvePath(file, [jsonFile.base]));
                     if (fileDef[2]) {
                         renderMixin(json, fileDef[1], fileDef[2]);
@@ -325,7 +332,7 @@ Build.prototype = {
         
         var addAlias = function(file, as) {
 
-            if (as == "*") {
+            if (as === "*") {
                 as = file.getDefaultAlias();
             }
 
@@ -335,7 +342,7 @@ Build.prototype = {
 
             // alias is already occupied
             // in this build
-            if (allAliases[as] && allAliases[as] != file.path) {
+            if (allAliases[as] && allAliases[as] !== file.path) {
 
                 throw "Non unique alias \"" + as + "\" Found in " +
                         allAliases[as] + " and " + file.path;
@@ -353,7 +360,7 @@ Build.prototype = {
 
             if (opt && opt.as) {
                 file = File.getOrCreate(filePath);
-                if (typeof opt.as == "string") {
+                if (typeof opt.as === "string") {
                     //file.addAs(opt.as, allAliases);
                     addAlias(file, opt.as);
                 }

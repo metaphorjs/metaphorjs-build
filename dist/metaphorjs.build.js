@@ -64,7 +64,7 @@ var varType = function(){
             return -1;
         }
 
-        if (num == 1 && isNaN(val)) {
+        if (num === 1 && isNaN(val)) {
             return 8;
         }
 
@@ -87,7 +87,7 @@ function isString(value) {
  * @returns {boolean}
  */
 function isArray(value) {
-    return typeof value == "object" && varType(value) === 5;
+    return typeof value === "object" && varType(value) === 5;
 };
 
 
@@ -226,13 +226,13 @@ var isDir = function(dirPath) {
 
 
 
-var resolvePath = function(toResolve, locations) {
+var resolvePath = function(toResolve, locations, resolveDir) {
 
     if (toResolve.indexOf("./") !== 0 &&
         toResolve.indexOf("../") !== 0 &&
-        toResolve.indexOf("*") == -1 &&
-        toResolve.indexOf("/") == -1 &&
-        toResolve.indexOf(".js") != toResolve.length - 3) {
+        toResolve.indexOf("*") === -1 &&
+        toResolve.indexOf("/") === -1 &&
+        toResolve.indexOf(".js") !== toResolve.length - 3) {
         return true;
     }
 
@@ -249,10 +249,10 @@ var resolvePath = function(toResolve, locations) {
         inx,
         i, l,
         loc,
-        dirMode = false,
-        abs = norm.substr(0, 1) == "/";
+        dirMode = !!resolveDir,
+        abs = norm.substr(0, 1) === "/";
 
-    while ((inx = norm.indexOf('*')) != -1) {
+    while ((inx = norm.indexOf('*')) !== -1) {
         norm = norm.substr(0, inx);
         norm = norm.split('/');
         norm.pop();
@@ -271,7 +271,7 @@ var resolvePath = function(toResolve, locations) {
     for (i = 0, l = locations.length; i < l; i++) {
         loc = locations[i];
 
-        if (loc.substr(loc.length - 1) != '/') {
+        if (loc.substr(loc.length - 1) !== '/') {
             loc += '/';
         }
 
@@ -284,7 +284,7 @@ var resolvePath = function(toResolve, locations) {
 
     try {
         var resolved = require.resolve(toResolve);
-        if (resolved == toResolve) {
+        if (resolved === toResolve) {
             return true;
         }
         return resolved;
@@ -739,7 +739,7 @@ var Build = function(jsonFile, name) {
     self.fileOptions    = {};
     self.templates      = [];
 
-    var raw = typeof name == "string" ?
+    var raw = typeof name === "string" ?
                 jsonFile.build[name] || jsonFile.mixin[name] :
                 name,
         key;
@@ -839,12 +839,12 @@ Build.prototype = {
                     else {
                         var key, oldVal;
                         for (key in props) {
-                            if (typeof oldProps[key] == "undefined") {
+                            if (typeof oldProps[key] === "undefined") {
                                 oldProps[key] = props[key];
                             }
-                            else if (key == "as") {
+                            else if (key === "as") {
                                 oldVal = oldProps[key];
-                                if (typeof oldVal == "string") {
+                                if (typeof oldVal === "string") {
                                     oldProps[key] = [oldVal];
                                 }
                                 oldProps[key].push(props[key]);
@@ -858,9 +858,16 @@ Build.prototype = {
                 }
             },
 
-            addTplFile = function(path, props) {
+            addTplFile = function(path, props, jsonFile) {
                 if (!allTpls[path]) {
-                    allTpls[path] = props || {};
+                    props = props || {};
+                    if (props.root) {
+                        props.root = resolvePath(props.root, [jsonFile.base], true);
+                        if (props.root.substr(props.root.length - 1) !== '/') {
+                            props.root += '/';
+                        }
+                    }
+                    allTpls[path] = props;
                     allTplsCnt++;
                 }
             },
@@ -875,7 +882,7 @@ Build.prototype = {
                     ext = raw.extension || "js",
                     tmp = "/tmp/mjs-build-tmp-" + (new Date).getTime() + "." + ext,
                     r = require,
-                    Builder = typeof Builder == "undefined" ? r("./Builder.js") : Builder;
+                    Builder = typeof Builder === "undefined" ? r("./Builder.js") : Builder;
 
                 raw.specificTarget = tmp;
 
@@ -897,7 +904,7 @@ Build.prototype = {
 
 
                 mixins.forEach(function(item){
-                    if (typeof item == "string") {
+                    if (typeof item === "string") {
                         processMixin(getMixin(jsonFile, item), jsonFile);
                     }
                     else {
@@ -928,7 +935,7 @@ Build.prototype = {
 
             processTplItem = function(fileDef, jsonFile) {
 
-                if (typeof fileDef == "string") {
+                if (typeof fileDef === "string") {
                     fileDef = [fileDef];
                 }
 
@@ -938,13 +945,13 @@ Build.prototype = {
                 ext = path.extname(file).substr(1) || /^html|tpl$/;
                 getFileList(resolvePath(file, [jsonFile.base]), ext)
                     .forEach(function(file){
-                        addTplFile(file, fileDef[1]);
+                        addTplFile(file, fileDef[1], jsonFile);
                     });
             },
 
             processFileItem = function(fileDef, jsonFile){
 
-                if (typeof fileDef == "string") {
+                if (typeof fileDef === "string") {
                     fileDef = [fileDef];
                 }
 
@@ -953,7 +960,7 @@ Build.prototype = {
                     ext;
 
                 // mixin
-                if (file.indexOf('.') == -1 && file.indexOf('*') == -1) {
+                if (file.indexOf('.') === -1 && file.indexOf('*') === -1) {
                     if (fileDef[1]) {
                         renderMixin(jsonFile, file, fileDef[1]);
                     }
@@ -961,7 +968,7 @@ Build.prototype = {
                         processMixin(getMixin(jsonFile, file), jsonFile);
                     }
                 }
-                else if (path.extname(file) == ".json") {
+                else if (path.extname(file) === ".json") {
                     json = JsonFile.get(resolvePath(file, [jsonFile.base]));
                     if (fileDef[2]) {
                         renderMixin(json, fileDef[1], fileDef[2]);
@@ -1046,7 +1053,7 @@ Build.prototype = {
         
         var addAlias = function(file, as) {
 
-            if (as == "*") {
+            if (as === "*") {
                 as = file.getDefaultAlias();
             }
 
@@ -1056,7 +1063,7 @@ Build.prototype = {
 
             // alias is already occupied
             // in this build
-            if (allAliases[as] && allAliases[as] != file.path) {
+            if (allAliases[as] && allAliases[as] !== file.path) {
 
                 throw "Non unique alias \"" + as + "\" Found in " +
                         allAliases[as] + " and " + file.path;
@@ -1074,7 +1081,7 @@ Build.prototype = {
 
             if (opt && opt.as) {
                 file = File.getOrCreate(filePath);
-                if (typeof opt.as == "string") {
+                if (typeof opt.as === "string") {
                     //file.addAs(opt.as, allAliases);
                     addAlias(file, opt.as);
                 }
@@ -2541,8 +2548,8 @@ var Watchable = function(){
             var first   = val.substr(0, 1),
                 last    = val.length - 1;
 
-            if (first == '"' || first == "'") {
-                if (val.indexOf(first, 1) == last) {
+            if (first === '"' || first === "'") {
+                if (val.indexOf(first, 1) === last) {
                     return val.substring(1, last);
                 }
             }
@@ -2573,13 +2580,13 @@ var Watchable = function(){
 
                 action = prs[prsi];
 
-                if (action == 'D') {
+                if (action === 'D') {
                     continue;
                 }
 
                 k = getKey(a2[a2i]);
 
-                if (k != undf && used[k] !== true && (index = map1[k]) !== undf) {
+                if (k !== undf && used[k] !== true && (index = map1[k]) !== undf) {
                     newPrs.push(index);
                     used[k] = true;
                 }
@@ -2630,7 +2637,7 @@ var Watchable = function(){
         self.mock = opt.mock;
         self.origCode = code;
 
-        if (opt.mock && code.indexOf(".") == -1) {
+        if (opt.mock && code.indexOf(".") === -1) {
             type = "attr";
         }
         else if (code && dataObj) {
@@ -2648,7 +2655,7 @@ var Watchable = function(){
             });
         }
 
-        if (type == "expr") {
+        if (type === "expr") {
             code        = self._parsePipes(code, dataObj, true);
             code        = self._parsePipes(code, dataObj, false);
 
@@ -2668,11 +2675,11 @@ var Watchable = function(){
         self.type       = type;
         self.obj        = dataObj;
 
-        if (type == "expr") {
+        if (type === "expr") {
             self.getterFn   = opt.getterFn || createGetter(code);
         }
 
-        if (type != "static" || self.pipes) {
+        if (type !== "static" || self.pipes) {
             self.curr = self.curr || self._getValue();
             self.currCopy = isPrimitive(self.curr) ? self.curr : copy(self.curr);
         }
@@ -2718,7 +2725,7 @@ var Watchable = function(){
 
         getConfig: function() {
             var getterFn = null;
-            if (this.type == "expr") {
+            if (this.type === "expr") {
                 getterFn   = createGetter(this.code, true);
             }
             return {
@@ -2754,7 +2761,7 @@ var Watchable = function(){
                 propName    = input ? "inputPipes" : "pipes",
                 cb          = input ? self.onInputParamChange : self.onPipeParamChange;
 
-            if (text.indexOf(separator) == -1) {
+            if (text.indexOf(separator) === -1) {
                 return text;
             }
 
@@ -2790,16 +2797,16 @@ var Watchable = function(){
                 },
                 i, l;
 
-            if (name.substr(0,2) == "!!") {
+            if (name.substr(0,2) === "!!") {
                 name = name.substr(2);
                 opt.dblneg = true;
             }
             else {
-                if (fchar == "!") {
+                if (fchar === "!") {
                     name = name.substr(1);
                     opt.neg = true;
                 }
-                else if (fchar == "?") {
+                else if (fchar === "?") {
                     name = name.substr(1);
                     opt.undeterm = true;
                 }
@@ -2813,9 +2820,11 @@ var Watchable = function(){
                     fn = self.nsGet("filter." + name, true);
                 }
                 if (!fn) {
-                    fn = (typeof window != "undefined" ? window[name] : null) || dataObj[name];
+                    fn = (typeof window !== "undefined" ? window[name] : null) || dataObj[name];
                 }
             }
+
+            //console.log(!!self.nsGet, name, fn)
 
             if (isFunction(fn)) {
 
@@ -3033,10 +3042,10 @@ var Watchable = function(){
 
             val = self._runThroughPipes(val, self.inputPipes);
 
-            if (type == "attr") {
+            if (type === "attr") {
                 self.obj[self.code] = val;
             }
-            else if (type == "expr") {
+            else if (type === "expr") {
 
                 if (!self.setterFn) {
                     self.setterFn   = createSetter(self.code);
@@ -3044,7 +3053,7 @@ var Watchable = function(){
 
                 self.setterFn(self.obj, val);
             }
-            else if (type == "object") {
+            else if (type === "object") {
                 self.obj = val;
             }
         },
@@ -3376,13 +3385,13 @@ var Watchable = function(){
                     return expr;
                 }
                 var prop;
-                if (expr.charAt(0) == '.') {
+                if (expr.charAt(0) === '.') {
                     prop = expr.substr(1);
                     if (dataObj.hasOwnProperty(prop)) {
                         return prop;
                     }
                 }
-                else if (expr.substr(0, 5) == "this.") {
+                else if (expr.substr(0, 5) === "this.") {
                     prop = expr.substr(5);
                     if (dataObj.hasOwnProperty(prop)) {
                         return prop;
@@ -3398,12 +3407,18 @@ var Watchable = function(){
          * @param {object} scope
          * @returns {*}
          */
-        evaluate    = function(expr, scope) {
+        evaluate    = function(expr, scope, opt) {
             var val;
             if (val = isStatic(expr)) {
                 return val;
             }
-            return createGetter(expr)(scope);
+            if (expr.indexOf('|') === -1) {
+                return createGetter(expr)(scope);
+            }
+            var w = create(scope, expr, null, null, opt),
+                v = w.getValue();
+            w.unsubscribeAndDestroy();
+            return v;
         };
 
 
@@ -4379,6 +4394,7 @@ var Class = function(){
             var name            = definition.$class,
                 parentClass     = $extends || definition.$extends,
                 mixins          = definition.$mixins,
+                alias           = definition.$alias,
                 pConstructor,
                 i, l, k, noop, prototype, c, mixin;
 
@@ -4456,6 +4472,9 @@ var Class = function(){
 
             if (name) {
                 ns.register(name, c);
+            }
+            if (alias) {
+                ns.register(alias, c);
             }
 
             return c;
@@ -4633,9 +4652,9 @@ var TextRenderer = function(){
         factory                 = function(scope, origin, parent, userData, recursive) {
 
             if (!origin || !origin.indexOf ||
-                (origin.indexOf(startSymbol) == -1 &&
-                 origin.indexOf(langStartSymbol) == -1 &&
-                 origin.indexOf(savedBoundary) == -1)) {
+                (origin.indexOf(startSymbol) === -1 &&
+                 origin.indexOf(langStartSymbol) === -1 &&
+                 origin.indexOf(savedBoundary) === -1)) {
                 return null;
             }
 
@@ -4706,7 +4725,7 @@ var TextRenderer = function(){
 
             var text = self.text;
 
-            if (text.indexOf('\\{') != -1) {
+            if (text.indexOf('\\{') !== -1) {
                 return text.replace(rReplaceEscape, '{');
             }
 
@@ -4758,13 +4777,13 @@ var TextRenderer = function(){
 
             // regular keys
             while(index < textLength) {
-                if (((startIndex = text.indexOf(startSymbol, index)) != -1) &&
-                    ((endIndex = text.indexOf(endSymbol, startIndex + startSymbolLength)) != -1) &&
-                    text.substr(startIndex - 1, 1) != '\\') {
+                if (((startIndex = text.indexOf(startSymbol, index)) !== -1) &&
+                    ((endIndex = text.indexOf(endSymbol, startIndex + startSymbolLength)) !== -1) &&
+                    text.substr(startIndex - 1, 1) !== '\\') {
 
                     result += text.substring(index, startIndex);
 
-                    if (endIndex != startIndex + startSymbolLength) {
+                    if (endIndex !== startIndex + startSymbolLength) {
                         result += self.watcherMatch(
                             text.substring(startIndex + startSymbolLength, endIndex),
                             false,
@@ -4792,13 +4811,13 @@ var TextRenderer = function(){
             // lang keys
             while(index < textLength) {
 
-                if (((startIndex = text.indexOf(langStartSymbol, index)) != -1) &&
-                    ((endIndex = text.indexOf(langEndSymbol, startIndex + langStartLength)) != -1) &&
-                    text.substr(startIndex - 1, 1) != '\\') {
+                if (((startIndex = text.indexOf(langStartSymbol, index)) !== -1) &&
+                    ((endIndex = text.indexOf(langEndSymbol, startIndex + langStartLength)) !== -1) &&
+                    text.substr(startIndex - 1, 1) !== '\\') {
 
                     result += text.substring(index, startIndex);
 
-                    if (endIndex != startIndex + langStartLength) {
+                    if (endIndex !== startIndex + langStartLength) {
                         result += self.watcherMatch(
                             text.substring(startIndex + langStartLength, endIndex),
                             true,
@@ -4826,8 +4845,8 @@ var TextRenderer = function(){
                 getterid;
 
             while(index < textLength) {
-                if (((startIndex = text.indexOf(savedBoundary, index)) != -1) &&
-                    (endIndex = text.indexOf(savedBoundary, startIndex + bndLen)) != -1) {
+                if (((startIndex = text.indexOf(savedBoundary, index)) !== -1) &&
+                    (endIndex = text.indexOf(savedBoundary, startIndex + bndLen)) !== -1) {
 
                     result += text.substring(index, startIndex);
 
@@ -4861,9 +4880,9 @@ var TextRenderer = function(){
                 b       = self.boundary,
                 getter  = null;
 
-            if (typeof expr == "number") {
+            if (typeof expr === "number") {
                 var getterId = expr;
-                if (typeof __MetaphorJsPrebuilt != "undefined") {
+                if (typeof __MetaphorJsPrebuilt !== "undefined") {
                     expr = __MetaphorJsPrebuilt['__tpl_getter_codes'][getterId];
                     getter = __MetaphorJsPrebuilt['__tpl_getters'][getterId];
                 }
@@ -4876,10 +4895,10 @@ var TextRenderer = function(){
                 expr        = trim(expr);
                 var tmp     = split(expr, "|"),
                     key     = trim(tmp[0]);
-                if (key.substr(0, 1) != ".") {
+                if (key.substr(0, 1) !== ".") {
                     tmp[0]  = "'" + key + "'";
                 }
-                if (tmp.length == 1) {
+                if (tmp.length === 1) {
                     tmp.push("l");
                 }
                 expr        = tmp.join(" | ");
@@ -5036,6 +5055,7 @@ extend(Scope.prototype, {
     $$historyWatchers: null,
     $$checking: false,
     $$destroyed: false,
+    $$changing: false,
 
     $$tmt: null,
 
@@ -5134,7 +5154,7 @@ extend(Scope.prototype, {
         var self = this,
             name;
 
-        if (typeof fn == "string") {
+        if (typeof fn === "string") {
             name = fn;
             fn = context[name];
         }
@@ -5168,7 +5188,7 @@ extend(Scope.prototype, {
 
     $set: function(key, value) {
         var self = this;
-        if (typeof key == "string") {
+        if (typeof key === "string") {
             this[key] = value;
         }
         else {
@@ -5229,7 +5249,15 @@ extend(Scope.prototype, {
         }
 
         if (changes > 0) {
+            self.$$changing = true;
             self.$check();
+        }
+        else {
+            // finished changing after all iterations
+            if (self.$$changing) {
+                self.$$changing = false;
+                self.$$observable.trigger("changed");
+            }
         }
     },
 
@@ -5378,11 +5406,13 @@ Builder.prototype   = {
                 tplUrl = tplCfg.prefix + tplUrl;
             }
 
-            var tr = new TextRenderer(scope, tpl, null, null, null, boundary, "mock");
+            //var tr = new TextRenderer(scope, tpl, null, null, null, boundary, "mock");
 
-            tr.watchers.forEach(function(w, inx){
+            tpls[tplUrl] = tpl;
+
+            /*tr.watchers.forEach(function(w, inx){
                 var cfg = w.getConfig();
-                if (cfg.type == "expr" && !cfg.hasPipes && !cfg.hasInputPipes) {
+                if (cfg.type === "expr" && !cfg.hasPipes && !cfg.hasInputPipes) {
                     var nextInx = fns.length;
                     fns.push(cfg.getter);
                     codes.push(cfg.code);
@@ -5399,7 +5429,7 @@ Builder.prototype   = {
                 }
 
                 tpls[tplUrl] = tpl;
-            });
+            });*/
         }
 
         self.templates = tpls;

@@ -3,13 +3,13 @@ var fs = require("fs"),
     path = require("path"),
     isDir = require("metaphorjs/src/func/fs/isDir.js");
 
-module.exports = function(toResolve, locations) {
+module.exports = function(toResolve, locations, resolveDir) {
 
     if (toResolve.indexOf("./") !== 0 &&
         toResolve.indexOf("../") !== 0 &&
-        toResolve.indexOf("*") == -1 &&
-        toResolve.indexOf("/") == -1 &&
-        toResolve.indexOf(".js") != toResolve.length - 3) {
+        toResolve.indexOf("*") === -1 &&
+        toResolve.indexOf("/") === -1 &&
+        toResolve.indexOf(".js") !== toResolve.length - 3) {
         return true;
     }
 
@@ -26,10 +26,10 @@ module.exports = function(toResolve, locations) {
         inx,
         i, l,
         loc,
-        dirMode = false,
-        abs = norm.substr(0, 1) == "/";
+        dirMode = !!resolveDir,
+        abs = norm.substr(0, 1) === "/";
 
-    while ((inx = norm.indexOf('*')) != -1) {
+    while ((inx = norm.indexOf('*')) !== -1) {
         norm = norm.substr(0, inx);
         norm = norm.split('/');
         norm.pop();
@@ -48,7 +48,7 @@ module.exports = function(toResolve, locations) {
     for (i = 0, l = locations.length; i < l; i++) {
         loc = locations[i];
 
-        if (loc.substr(loc.length - 1) != '/') {
+        if (loc.substr(loc.length - 1) !== '/') {
             loc += '/';
         }
 
@@ -61,7 +61,7 @@ module.exports = function(toResolve, locations) {
 
     try {
         var resolved = require.resolve(toResolve);
-        if (resolved == toResolve) {
+        if (resolved === toResolve) {
             return true;
         }
         return resolved;
