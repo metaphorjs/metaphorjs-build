@@ -1167,6 +1167,475 @@ var bind = Function.prototype.bind ?
 
 
 
+var strUndef = "undefined";
+
+
+
+function isObject(value) {
+    if (value === null || typeof value != "object") {
+        return false;
+    }
+    var vt = varType(value);
+    return vt > 2 || vt == -1;
+};
+
+
+
+var Cache = function(){
+
+    var globalCache;
+
+    /**
+     * @class Cache
+     * @param {bool} cacheRewritable
+     * @constructor
+     */
+    var Cache = function(cacheRewritable) {
+
+        var storage = {},
+
+            finders = [];
+
+        if (arguments.length == 0) {
+            cacheRewritable = true;
+        }
+
+        return {
+
+            /**
+             * @param {function} fn
+             * @param {object} context
+             * @param {bool} prepend
+             */
+            addFinder: function(fn, context, prepend) {
+                finders[prepend? "unshift" : "push"]({fn: fn, context: context});
+            },
+
+            /**
+             * @method
+             * @param {string} name
+             * @param {*} value
+             * @param {bool} rewritable
+             * @returns {*} value
+             */
+            add: function(name, value, rewritable) {
+
+                if (storage[name] && storage[name].rewritable === false) {
+                    return storage[name];
+                }
+
+                storage[name] = {
+                    rewritable: typeof rewritable != strUndef ? rewritable : cacheRewritable,
+                    value: value
+                };
+
+                return value;
+            },
+
+            /**
+             * @method
+             * @param {string} name
+             * @returns {*}
+             */
+            get: function(name) {
+
+                if (!storage[name]) {
+                    if (finders.length) {
+
+                        var i, l, res,
+                            self = this;
+
+                        for (i = 0, l = finders.length; i < l; i++) {
+
+                            res = finders[i].fn.call(finders[i].context, name, self);
+
+                            if (res !== undf) {
+                                return self.add(name, res, true);
+                            }
+                        }
+                    }
+
+                    return undf;
+                }
+
+                return storage[name].value;
+            },
+
+            /**
+             * @method
+             * @param {string} name
+             * @returns {*}
+             */
+            remove: function(name) {
+                var rec = storage[name];
+                if (rec && rec.rewritable === true) {
+                    delete storage[name];
+                }
+                return rec ? rec.value : undf;
+            },
+
+            /**
+             * @method
+             * @param {string} name
+             * @returns {boolean}
+             */
+            exists: function(name) {
+                return !!storage[name];
+            },
+
+            /**
+             * @param {function} fn
+             * @param {object} context
+             */
+            eachEntry: function(fn, context) {
+                var k;
+                for (k in storage) {
+                    fn.call(context, storage[k].value, k);
+                }
+            },
+
+            /**
+             * @method
+             */
+            destroy: function() {
+
+                var self = this;
+
+                if (self === globalCache) {
+                    globalCache = null;
+                }
+
+                storage = null;
+                cacheRewritable = null;
+
+                self.add = null;
+                self.get = null;
+                self.destroy = null;
+                self.exists = null;
+                self.remove = null;
+            }
+        };
+    };
+
+    /**
+     * @method
+     * @static
+     * @returns {Cache}
+     */
+    Cache.global = function() {
+
+        if (!globalCache) {
+            globalCache = new Cache(true);
+        }
+
+        return globalCache;
+    };
+
+    return Cache;
+
+}();
+
+
+
+
+
+/**
+ * @class Namespace
+ * @code ../examples/main.js
+ */
+var Namespace = function(){
+
+
+    /**
+     * @param {Object} root optional; usually window or global
+     * @param {String} rootName optional. If you want custom object to be root and
+     * this object itself is the first level of namespace
+     * @param {Cache} cache optional
+     * @constructor
+     */
+    var Namespace   = function(root, rootName, cache) {
+
+        cache       = cache || new Cache(false);
+        var self    = this,
+            rootL   = rootName ? rootName.length : null;
+
+        if (!root) {
+            if (typeof global != strUndef) {
+                root    = global;
+            }
+            else {
+                root    = window;
+            }
+        }
+
+        var normalize   = function(ns) {
+            if (ns && rootName && ns.substr(0, rootL) != rootName) {
+                return rootName + "." + ns;
+            }
+            return ns;
+        };
+
+        var parseNs     = function(ns) {
+
+            ns = normalize(ns);
+
+            var tmp     = ns.split("."),
+                i,
+                last    = tmp.pop(),
+                parent  = tmp.join("."),
+                len     = tmp.length,
+                name,
+                current = root;
+
+
+            if (cache[parent]) {
+                return [cache[parent], last, ns];
+            }
+
+            if (len > 0) {
+                for (i = 0; i < len; i++) {
+
+                    name    = tmp[i];
+
+                    if (rootName && i == 0 && name == rootName) {
+                        current = root;
+                        continue;
+                    }
+
+                    if (current[name] === undf) {
+                        current[name]   = {};
+                    }
+
+                    current = current[name];
+                }
+            }
+
+            return [current, last, ns];
+        };
+
+        /**
+         * Get namespace/cache object
+         * @method
+         * @param {string} ns
+         * @param {bool} cacheOnly
+         * @returns {*}
+         */
+        var get       = function(ns, cacheOnly) {
+
+            ns = normalize(ns);
+
+            if (cache.exists(ns)) {
+                return cache.get(ns);
+            }
+
+            if (cacheOnly) {
+                return undf;
+            }
+
+            var tmp     = ns.split("."),
+                i,
+                len     = tmp.length,
+                name,
+                current = root;
+
+            for (i = 0; i < len; i++) {
+
+                name    = tmp[i];
+
+                if (rootName && i == 0 && name == rootName) {
+                    current = root;
+                    continue;
+                }
+
+                if (current[name] === undf) {
+                    return undf;
+                }
+
+                current = current[name];
+            }
+
+            if (current) {
+                cache.add(ns, current);
+            }
+
+            return current;
+        };
+
+        /**
+         * Register item
+         * @method
+         * @param {string} ns
+         * @param {*} value
+         */
+        var register    = function(ns, value) {
+
+            var parse   = parseNs(ns),
+                parent  = parse[0],
+                name    = parse[1];
+
+            if (isObject(parent) && parent[name] === undf) {
+
+                parent[name]        = value;
+                cache.add(parse[2], value);
+            }
+
+            return value;
+        };
+
+        /**
+         * Item exists
+         * @method
+         * @param {string} ns
+         * @returns boolean
+         */
+        var exists      = function(ns) {
+            return get(ns, true) !== undf;
+        };
+
+        /**
+         * Add item only to the cache
+         * @function add
+         * @param {string} ns
+         * @param {*} value
+         */
+        var add = function(ns, value) {
+
+            ns = normalize(ns);
+            cache.add(ns, value);
+            return value;
+        };
+
+        /**
+         * Remove item from cache
+         * @method
+         * @param {string} ns
+         */
+        var remove = function(ns) {
+            ns = normalize(ns);
+            cache.remove(ns);
+        };
+
+        /**
+         * Make alias in the cache
+         * @method
+         * @param {string} from
+         * @param {string} to
+         */
+        var makeAlias = function(from, to) {
+
+            from = normalize(from);
+            to = normalize(to);
+
+            var value = cache.get(from);
+
+            if (value !== undf) {
+                cache.add(to, value);
+            }
+        };
+
+        /**
+         * Destroy namespace and all classes in it
+         * @method
+         */
+        var destroy     = function() {
+
+            var self = this,
+                k;
+
+            if (self === globalNs) {
+                globalNs = null;
+            }
+
+            cache.eachEntry(function(entry){
+                if (entry && entry.$destroy) {
+                    entry.$destroy();
+                }
+            });
+
+            cache.destroy();
+            cache = null;
+
+            for (k in self) {
+                self[k] = null;
+            }
+        };
+
+        self.register   = register;
+        self.exists     = exists;
+        self.get        = get;
+        self.add        = add;
+        self.remove     = remove;
+        self.normalize  = normalize;
+        self.makeAlias  = makeAlias;
+        self.destroy    = destroy;
+    };
+
+    Namespace.prototype.register = null;
+    Namespace.prototype.exists = null;
+    Namespace.prototype.get = null;
+    Namespace.prototype.add = null;
+    Namespace.prototype.remove = null;
+    Namespace.prototype.normalize = null;
+    Namespace.prototype.makeAlias = null;
+    Namespace.prototype.destroy = null;
+
+    var globalNs;
+
+    /**
+     * Get global namespace
+     * @method
+     * @static
+     * @returns {Namespace}
+     */
+    Namespace.global = function() {
+        if (!globalNs) {
+            globalNs = new Namespace;
+        }
+        return globalNs;
+    };
+
+    return Namespace;
+
+}();
+
+
+
+
+var ns  = new Namespace(MetaphorJs, "MetaphorJs");
+
+
+
+var nsGet = ns.get;
+
+
+
+var filterLookup = function(name) {
+    return nsGet("filter." + name, true);
+};
+
+
+
+/**
+ * @param {*} list
+ * @returns {[]}
+ */
+function toArray(list) {
+    if (list && !list.length != undf && list !== ""+list) {
+        for(var a = [], i =- 1, l = list.length>>>0; ++i !== l; a[i] = list[i]){}
+        return a;
+    }
+    else if (list) {
+        return [list];
+    }
+    else {
+        return [];
+    }
+};
+
+function isFunction(value) {
+    return typeof value == 'function';
+};
+
 /**
  * @param {string} str
  * @param {string} separator
@@ -1233,10 +1702,6 @@ var split = function(str, separator, allowEmpty) {
     parts.push(str.substring(prev).replace(esc + separator, separator));
 
     return parts;
-};
-
-function isFunction(value) {
-    return typeof value == 'function';
 };
 
 
@@ -1322,8 +1787,6 @@ function isPlainObject(value) {
             value.constructor === Object;
 
 };
-
-var strUndef = "undefined";
 
 
 
@@ -2612,26 +3075,26 @@ var Watchable = function(){
      * @param {function} fn optional listener
      * @param {object} fnScope optional listener's "this" object
      *  @subparam {*} userData optional data to pass to the listener
-     *  @subparam {Namespace} namespace optional namespace to get filters and pipes from
+     *  @subparam {function} filterLookup
      *  @subparam {*} mock do not calculate real values, use mock instead
      *  @subparam {function} predefined getter fn
+     * @param {object} opt
      * @constructor
      */
     var Watchable   = function(dataObj, code, fn, fnScope, opt) {
-
-        // userData, namespace, mock
 
         if (!observable) {
             observable  = new Observable;
         }
 
+        opt = opt || {};
+
         var self    = this,
             id      = nextUid(),
             type;
 
-        if (opt.namespace) {
-            self.namespace = opt.namespace;
-            self.nsGet = opt.namespace.get;
+        if (opt.filterLookup) {
+            self.filterLookup = opt.filterLookup;
         }
 
         self.mock = opt.mock;
@@ -2691,8 +3154,11 @@ var Watchable = function(){
 
     extend(Watchable.prototype, {
 
-        namespace: null,
-        nsGet: null,
+        //namespace: null,
+        //nsGet: null,
+
+        filterLookup: null,
+
         staticValue: null,
         origCode: null,
         code: null,
@@ -2773,7 +3239,7 @@ var Watchable = function(){
 
             for(i = 0, l = parts.length; i < l; i++) {
                 pipe = split(trim(parts[i]), ':');
-                self._addPipe(pipes, pipe, dataObj, cb);
+                self._addPipe(pipes, pipe, dataObj, cb, false);
             }
 
             if (pipes.length) {
@@ -2783,41 +3249,89 @@ var Watchable = function(){
             return trim(ret);
         },
 
-        _addPipe: function(pipes, pipe, dataObj, onParamChange) {
+        prependInuptPipe: function() {
+            this.inputPipes = this.inputPipes || [];
+            this._addPipe(
+                this.inputPipes,
+                toArray(arguments),
+                this.obj,
+                this.onInputParamChange,
+                true
+            );
+        },
+        addInuptPipe: function() {
+            this.inputPipes = this.inputPipes || [];
+            this._addPipe(
+                this.inputPipes,
+                toArray(arguments),
+                this.obj,
+                this.onInputParamChange,
+                false
+            );
+        },
+
+        addPipe: function() {
+            this.pipes = this.pipes || [];
+            this._addPipe(
+                this.pipes,
+                toArray(arguments),
+                this.obj,
+                this.onPipeParamChange,
+                false
+            );
+        },
+        prependPipe: function() {
+            this.pipes = this.pipes || [];
+            this._addPipe(
+                this.pipes,
+                toArray(arguments),
+                this.obj,
+                this.onPipeParamChange,
+                true
+            );
+        },
+
+        _addPipe: function(pipes, pipe, dataObj, onParamChange, prepend) {
 
             var self    = this,
                 name    = pipe.shift(),
-                fn      = null,
+                fn      = isFunction(name) ? name : null,
                 ws      = [],
-                fchar   = name.substr(0,1),
+                fchar   = fn ? null : name.substr(0,1),
                 opt     = {
                     neg: false,
                     dblneg: false,
-                    undeterm: false
+                    undeterm: false,
+                    name: name
                 },
                 i, l;
 
-            if (name.substr(0,2) === "!!") {
-                name = name.substr(2);
-                opt.dblneg = true;
+            if (!fn) {
+                if (name.substr(0, 2) === "!!") {
+                    name = name.substr(2);
+                    opt.dblneg = true;
+                }
+                else {
+                    if (fchar === "!") {
+                        name = name.substr(1);
+                        opt.neg = true;
+                    }
+                    else if (fchar === "?") {
+                        name = name.substr(1);
+                        opt.undeterm = true;
+                    }
+                }
             }
             else {
-                if (fchar === "!") {
-                    name = name.substr(1);
-                    opt.neg = true;
-                }
-                else if (fchar === "?") {
-                    name = name.substr(1);
-                    opt.undeterm = true;
-                }
+                opt.name = fn.name;
             }
 
             if (self.mock) {
                 fn      = function(){};
             }
             else {
-                if (self.nsGet) {
-                    fn = self.nsGet("filter." + name, true);
+                if (!fn && self.filterLookup) {
+                    fn = self.filterLookup(name);
                 }
                 if (!fn) {
                     fn = (typeof window !== "undefined" ? window[name] : null) || dataObj[name];
@@ -2829,13 +3343,22 @@ var Watchable = function(){
             if (isFunction(fn)) {
 
                 for (i = -1, l = pipe.length; ++i < l;
-                     ws.push(create(dataObj, pipe[i], onParamChange, self, null, self.namespace, self.mock))) {}
+                     ws.push(create(
+                         dataObj,
+                         pipe[i],
+                         onParamChange,
+                         self,
+                         {
+                             filterLookup: self.filterLookup,
+                             mock: self.mock
+                         }
+                     ))) {}
 
                 if (fn.$undeterministic) {
                     opt.undeterm = true;
                 }
 
-                pipes.push([fn, pipe, ws, opt]);
+                pipes[prepend?"unshift":"push"]([fn, pipe, ws, opt]);
 
                 if (opt.undeterm) {
                     self.deterministic = false;
@@ -2964,6 +3487,41 @@ var Watchable = function(){
          */
         hasInputPipes: function() {
             return this.inputPipes != null;
+        },
+
+        /**
+         * @param {function|string} p
+         * @returns {boolean}
+         */
+        hasPipe: function(p) {
+            return this._hasPipe(this.pipes, p);
+        },
+
+        /**
+         * @param {function|string} p
+         * @returns {boolean}
+         */
+        hasInputPipe: function(p) {
+            return this._hasPipe(this.inputPipes, p);
+        },
+
+        /**
+         * @param {array} pipes
+         * @param {function|string} p
+         * @returns {boolean}
+         */
+        _hasPipe: function(pipes, p) {
+            if (!pipes) {
+                return false;
+            }
+            var i, l, name;
+            name = isFunction(p) ? p.name : p;
+            for (i = 0, l = pipes.length; i < l; i++) {
+                if (pipes[i][3].name === name) {
+                    return true;
+                }
+            }
+            return false;
         },
 
         /**
@@ -3283,9 +3841,9 @@ var Watchable = function(){
      */
     var create = function(obj, code, fn, fnScope, opt) {
 
-            //userData, namespace, mock
             opt = opt || {};
             code = code || "";
+
             code = normalizeExpr(obj, trim(code), opt.mock);
 
             if (obj) {
@@ -3367,6 +3925,10 @@ var Watchable = function(){
          */
         normalizeExpr = function(dataObj, expr, mockMode) {
 
+            if (expr.substr(0, 2) === '{{') {
+                expr = expr.substring(2, expr.length - 2);
+            }
+
             // in mock mode we can't check dataObj for having
             // a property. dataObj does not exists in this
             // context
@@ -3405,6 +3967,7 @@ var Watchable = function(){
          * Evaluate code against object
          * @param {string} expr
          * @param {object} scope
+         * @param {object} opt
          * @returns {*}
          */
         evaluate    = function(expr, scope, opt) {
@@ -3442,440 +4005,6 @@ var createWatchable = Watchable.create;
 function isNull(value) {
     return value === null;
 };
-
-
-
-function isObject(value) {
-    if (value === null || typeof value != "object") {
-        return false;
-    }
-    var vt = varType(value);
-    return vt > 2 || vt == -1;
-};
-
-
-
-var Cache = function(){
-
-    var globalCache;
-
-    /**
-     * @class Cache
-     * @param {bool} cacheRewritable
-     * @constructor
-     */
-    var Cache = function(cacheRewritable) {
-
-        var storage = {},
-
-            finders = [];
-
-        if (arguments.length == 0) {
-            cacheRewritable = true;
-        }
-
-        return {
-
-            /**
-             * @param {function} fn
-             * @param {object} context
-             * @param {bool} prepend
-             */
-            addFinder: function(fn, context, prepend) {
-                finders[prepend? "unshift" : "push"]({fn: fn, context: context});
-            },
-
-            /**
-             * @method
-             * @param {string} name
-             * @param {*} value
-             * @param {bool} rewritable
-             * @returns {*} value
-             */
-            add: function(name, value, rewritable) {
-
-                if (storage[name] && storage[name].rewritable === false) {
-                    return storage[name];
-                }
-
-                storage[name] = {
-                    rewritable: typeof rewritable != strUndef ? rewritable : cacheRewritable,
-                    value: value
-                };
-
-                return value;
-            },
-
-            /**
-             * @method
-             * @param {string} name
-             * @returns {*}
-             */
-            get: function(name) {
-
-                if (!storage[name]) {
-                    if (finders.length) {
-
-                        var i, l, res,
-                            self = this;
-
-                        for (i = 0, l = finders.length; i < l; i++) {
-
-                            res = finders[i].fn.call(finders[i].context, name, self);
-
-                            if (res !== undf) {
-                                return self.add(name, res, true);
-                            }
-                        }
-                    }
-
-                    return undf;
-                }
-
-                return storage[name].value;
-            },
-
-            /**
-             * @method
-             * @param {string} name
-             * @returns {*}
-             */
-            remove: function(name) {
-                var rec = storage[name];
-                if (rec && rec.rewritable === true) {
-                    delete storage[name];
-                }
-                return rec ? rec.value : undf;
-            },
-
-            /**
-             * @method
-             * @param {string} name
-             * @returns {boolean}
-             */
-            exists: function(name) {
-                return !!storage[name];
-            },
-
-            /**
-             * @param {function} fn
-             * @param {object} context
-             */
-            eachEntry: function(fn, context) {
-                var k;
-                for (k in storage) {
-                    fn.call(context, storage[k].value, k);
-                }
-            },
-
-            /**
-             * @method
-             */
-            destroy: function() {
-
-                var self = this;
-
-                if (self === globalCache) {
-                    globalCache = null;
-                }
-
-                storage = null;
-                cacheRewritable = null;
-
-                self.add = null;
-                self.get = null;
-                self.destroy = null;
-                self.exists = null;
-                self.remove = null;
-            }
-        };
-    };
-
-    /**
-     * @method
-     * @static
-     * @returns {Cache}
-     */
-    Cache.global = function() {
-
-        if (!globalCache) {
-            globalCache = new Cache(true);
-        }
-
-        return globalCache;
-    };
-
-    return Cache;
-
-}();
-
-
-
-
-
-/**
- * @class Namespace
- * @code ../examples/main.js
- */
-var Namespace = function(){
-
-
-    /**
-     * @param {Object} root optional; usually window or global
-     * @param {String} rootName optional. If you want custom object to be root and
-     * this object itself is the first level of namespace
-     * @param {Cache} cache optional
-     * @constructor
-     */
-    var Namespace   = function(root, rootName, cache) {
-
-        cache       = cache || new Cache(false);
-        var self    = this,
-            rootL   = rootName ? rootName.length : null;
-
-        if (!root) {
-            if (typeof global != strUndef) {
-                root    = global;
-            }
-            else {
-                root    = window;
-            }
-        }
-
-        var normalize   = function(ns) {
-            if (ns && rootName && ns.substr(0, rootL) != rootName) {
-                return rootName + "." + ns;
-            }
-            return ns;
-        };
-
-        var parseNs     = function(ns) {
-
-            ns = normalize(ns);
-
-            var tmp     = ns.split("."),
-                i,
-                last    = tmp.pop(),
-                parent  = tmp.join("."),
-                len     = tmp.length,
-                name,
-                current = root;
-
-
-            if (cache[parent]) {
-                return [cache[parent], last, ns];
-            }
-
-            if (len > 0) {
-                for (i = 0; i < len; i++) {
-
-                    name    = tmp[i];
-
-                    if (rootName && i == 0 && name == rootName) {
-                        current = root;
-                        continue;
-                    }
-
-                    if (current[name] === undf) {
-                        current[name]   = {};
-                    }
-
-                    current = current[name];
-                }
-            }
-
-            return [current, last, ns];
-        };
-
-        /**
-         * Get namespace/cache object
-         * @method
-         * @param {string} ns
-         * @param {bool} cacheOnly
-         * @returns {*}
-         */
-        var get       = function(ns, cacheOnly) {
-
-            ns = normalize(ns);
-
-            if (cache.exists(ns)) {
-                return cache.get(ns);
-            }
-
-            if (cacheOnly) {
-                return undf;
-            }
-
-            var tmp     = ns.split("."),
-                i,
-                len     = tmp.length,
-                name,
-                current = root;
-
-            for (i = 0; i < len; i++) {
-
-                name    = tmp[i];
-
-                if (rootName && i == 0 && name == rootName) {
-                    current = root;
-                    continue;
-                }
-
-                if (current[name] === undf) {
-                    return undf;
-                }
-
-                current = current[name];
-            }
-
-            if (current) {
-                cache.add(ns, current);
-            }
-
-            return current;
-        };
-
-        /**
-         * Register item
-         * @method
-         * @param {string} ns
-         * @param {*} value
-         */
-        var register    = function(ns, value) {
-
-            var parse   = parseNs(ns),
-                parent  = parse[0],
-                name    = parse[1];
-
-            if (isObject(parent) && parent[name] === undf) {
-
-                parent[name]        = value;
-                cache.add(parse[2], value);
-            }
-
-            return value;
-        };
-
-        /**
-         * Item exists
-         * @method
-         * @param {string} ns
-         * @returns boolean
-         */
-        var exists      = function(ns) {
-            return get(ns, true) !== undf;
-        };
-
-        /**
-         * Add item only to the cache
-         * @function add
-         * @param {string} ns
-         * @param {*} value
-         */
-        var add = function(ns, value) {
-
-            ns = normalize(ns);
-            cache.add(ns, value);
-            return value;
-        };
-
-        /**
-         * Remove item from cache
-         * @method
-         * @param {string} ns
-         */
-        var remove = function(ns) {
-            ns = normalize(ns);
-            cache.remove(ns);
-        };
-
-        /**
-         * Make alias in the cache
-         * @method
-         * @param {string} from
-         * @param {string} to
-         */
-        var makeAlias = function(from, to) {
-
-            from = normalize(from);
-            to = normalize(to);
-
-            var value = cache.get(from);
-
-            if (value !== undf) {
-                cache.add(to, value);
-            }
-        };
-
-        /**
-         * Destroy namespace and all classes in it
-         * @method
-         */
-        var destroy     = function() {
-
-            var self = this,
-                k;
-
-            if (self === globalNs) {
-                globalNs = null;
-            }
-
-            cache.eachEntry(function(entry){
-                if (entry && entry.$destroy) {
-                    entry.$destroy();
-                }
-            });
-
-            cache.destroy();
-            cache = null;
-
-            for (k in self) {
-                self[k] = null;
-            }
-        };
-
-        self.register   = register;
-        self.exists     = exists;
-        self.get        = get;
-        self.add        = add;
-        self.remove     = remove;
-        self.normalize  = normalize;
-        self.makeAlias  = makeAlias;
-        self.destroy    = destroy;
-    };
-
-    Namespace.prototype.register = null;
-    Namespace.prototype.exists = null;
-    Namespace.prototype.get = null;
-    Namespace.prototype.add = null;
-    Namespace.prototype.remove = null;
-    Namespace.prototype.normalize = null;
-    Namespace.prototype.makeAlias = null;
-    Namespace.prototype.destroy = null;
-
-    var globalNs;
-
-    /**
-     * Get global namespace
-     * @method
-     * @static
-     * @returns {Namespace}
-     */
-    Namespace.global = function() {
-        if (!globalNs) {
-            globalNs = new Namespace;
-        }
-        return globalNs;
-    };
-
-    return Namespace;
-
-}();
-
-
-
-
-var ns  = new Namespace(MetaphorJs, "MetaphorJs");
 
 
 
@@ -4008,16 +4137,16 @@ var Class = function(){
             var k;
             for (k in mixin) {
                 if (mixin.hasOwnProperty(k)) {
-                    if (k == "$beforeInit") {
+                    if (k === "$beforeInit") {
                         prototype.$beforeInit.push(mixin[k]);
                     }
-                    else if (k == "$afterInit") {
+                    else if (k === "$afterInit") {
                         prototype.$afterInit.push(mixin[k]);
                     }
-                    else if (k == "$beforeDestroy") {
+                    else if (k === "$beforeDestroy") {
                         prototype.$beforeDestroy.push(mixin[k]);
                     }
-                    else if (k == "$afterDestroy") {
+                    else if (k === "$afterDestroy") {
                         prototype.$afterDestroy.push(mixin[k]);
                     }
                     else if (!prototype[k]) {
@@ -4640,25 +4769,29 @@ var TextRenderer = function(){
 
         savedBoundary           = '--##--',
 
-        langStartSymbol         = '{[',
-        langEndSymbol           = ']}',
-        langStartLength         = 2,
-        langEndLength           = 2,
-
         rReplaceEscape          = /\\{/g,
 
         observer                = new Observable,
 
-        factory                 = function(scope, origin, parent, userData, recursive) {
+        //parent, userData, recursive
+        factory                 = function(scope, origin, opt) {
 
             if (!origin || !origin.indexOf ||
                 (origin.indexOf(startSymbol) === -1 &&
-                 origin.indexOf(langStartSymbol) === -1 &&
                  origin.indexOf(savedBoundary) === -1)) {
+
+                if (opt.force) {
+                    return new TextRenderer(
+                        scope,
+                        startSymbol + origin + endSymbol,
+                        opt
+                    );
+                }
+
                 return null;
             }
 
-            return new TextRenderer(scope, origin, parent, userData, recursive);
+            return new TextRenderer(scope, origin, opt);
         };
 
     var TextRenderer = defineClass({
@@ -4682,22 +4815,25 @@ var TextRenderer = function(){
         boundary: null,
         mock: null,
 
-        $init: function(scope, origin, parent, userData, recursive, boundary, mock) {
+        //parent, userData, recursive, boundary, mock
+        $init: function(scope, origin, opt) {
+
+            opt = opt || {};
 
             var self        = this;
 
             self.id         = nextUid();
             self.origin     = origin;
             self.scope      = scope;
-            self.parent     = parent;
-            self.isRoot     = !parent;
-            self.data       = userData;
+            self.parent     = opt.parent;
+            self.isRoot     = !opt.parent;
+            self.data       = opt.userData;
             self.lang       = scope.$app ? scope.$app.lang : null;
-            self.boundary   = boundary || "---";
-            self.mock       = mock;
+            self.boundary   = opt.boundary || "---";
+            self.mock       = opt.mock;
 
-            if (recursive === true || recursive === false) {
-                self.recursive = recursive;
+            if (opt.recursive === true || opt.recursive === false) {
+                self.recursive = opt.recursive;
             }
 
             self.watchers   = [];
@@ -4723,7 +4859,7 @@ var TextRenderer = function(){
                 self.render();
             }
 
-            var text = self.text;
+            var text = self.text || "";
 
             if (text.indexOf('\\{') !== -1) {
                 return text.replace(rReplaceEscape, '{');
@@ -4739,6 +4875,7 @@ var TextRenderer = function(){
                 text    = self.processed,
                 b       = self.boundary,
                 i, l,
+                str,
                 ch;
 
             if (!self.children.length) {
@@ -4747,11 +4884,13 @@ var TextRenderer = function(){
 
             ch = self.children;
 
-            for (i = -1, l = ch.length; ++i < l;
-                 text = text.replace(
-                     b + i + b,
-                     ch[i] instanceof TextRenderer ? ch[i].getString() : ch[i]
-                 )) {}
+            for (i = -1, l = ch.length; ++i < l;) {
+                str = ch[i] instanceof TextRenderer ? ch[i].getString() : ch[i];
+                text = text.replace(
+                    b + i + b,
+                    str === null ? "" : str
+                );
+            }
 
             self.text = text;
 
@@ -4773,9 +4912,7 @@ var TextRenderer = function(){
                 startIndex,
                 endIndex,
                 result      = "";
-            //separators  = [];
 
-            // regular keys
             while(index < textLength) {
                 if (((startIndex = text.indexOf(startSymbol, index)) !== -1) &&
                     ((endIndex = text.indexOf(endSymbol, startIndex + startSymbolLength)) !== -1) &&
@@ -4786,7 +4923,6 @@ var TextRenderer = function(){
                     if (endIndex !== startIndex + startSymbolLength) {
                         result += self.watcherMatch(
                             text.substring(startIndex + startSymbolLength, endIndex),
-                            false,
                             mock
                         );
                     }
@@ -4802,42 +4938,9 @@ var TextRenderer = function(){
                 }
             }
 
-            index       = 0;
-            text        = result;
-            textLength  = text.length;
-            result      = "";
-            //separators  = [];
-
-            // lang keys
-            while(index < textLength) {
-
-                if (((startIndex = text.indexOf(langStartSymbol, index)) !== -1) &&
-                    ((endIndex = text.indexOf(langEndSymbol, startIndex + langStartLength)) !== -1) &&
-                    text.substr(startIndex - 1, 1) !== '\\') {
-
-                    result += text.substring(index, startIndex);
-
-                    if (endIndex !== startIndex + langStartLength) {
-                        result += self.watcherMatch(
-                            text.substring(startIndex + langStartLength, endIndex),
-                            true,
-                            mock
-                        );
-                    }
-
-                    index = endIndex + langEndLength;
-
-                } else {
-                    // we did not find an interpolation
-                    if (index !== textLength) {
-                        result += text.substring(index);
-                    }
-                    break;
-                }
-            }
 
             //saved keys
-            index       = 0;
+            /*index       = 0;
             text        = result;
             textLength  = text.length;
             result      = "";
@@ -4856,7 +4959,6 @@ var TextRenderer = function(){
 
                     result += self.watcherMatch(
                         getterid,
-                        false,
                         mock
                     );
 
@@ -4868,19 +4970,37 @@ var TextRenderer = function(){
                     }
                     break;
                 }
-            }
+            }*/
 
             return result;
         },
 
-        watcherMatch: function(expr, isLang, mock) {
+        watcherMatch: function(expr, mock) {
 
-            var self    = this,
-                ws      = self.watchers,
-                b       = self.boundary,
-                getter  = null;
+            var self        = this,
+                ws          = self.watchers,
+                b           = self.boundary,
+                w,
+                isLang      = false,
+                recursive   = self.recursive,
+                getter      = null;
 
-            if (typeof expr === "number") {
+            expr        = trim(expr);
+
+            if (expr.substr(0,1) === '-') {
+                var inx = expr.indexOf(" "),
+                    mods = expr.substr(1,inx);
+                expr = expr.substr(inx);
+
+                if (!recursive && mods.indexOf("r") !== -1) {
+                    recursive = true;
+                }
+                if (mods.indexOf("l") !== -1) {
+                    isLang = true;
+                }
+            }
+
+            /*if (typeof expr === "number") {
                 var getterId = expr;
                 if (typeof __MetaphorJsPrebuilt !== "undefined") {
                     expr = __MetaphorJsPrebuilt['__tpl_getter_codes'][getterId];
@@ -4889,28 +5009,26 @@ var TextRenderer = function(){
                 else {
                     return "";
                 }
-            }
+            }*/
 
-            if (isLang) {
-                expr        = trim(expr);
-                var tmp     = split(expr, "|"),
-                    key     = trim(tmp[0]);
-                if (key.substr(0, 1) !== ".") {
-                    tmp[0]  = "'" + key + "'";
-                }
-                if (tmp.length === 1) {
-                    tmp.push("l");
-                }
-                expr        = tmp.join(" | ");
-            }
-
-            ws.push(createWatchable(
+            w = createWatchable(
                 self.scope,
                 expr,
                 self.onDataChange,
                 self,
-                {namespace: ns, mock: mock, getterFn: getter}
-            ));
+                {
+                    filterLookup: filterLookup, mock: mock, getterFn: getter,
+                    userData: {
+                        recursive: recursive
+                    }
+                }
+            );
+
+            if (isLang && !w.hasPipe("l")) {
+                w.addPipe("l");
+            }
+
+            ws.push(w);
 
             return b + (ws.length-1) + b;
         },
@@ -4951,16 +5069,21 @@ var TextRenderer = function(){
                 ws      = self.watchers,
                 ch      = self.children,
                 scope   = self.scope,
-                rec     = self.recursive,
+                rec     = false,
                 i, l,
                 val;
 
             for (i = -1, l = ws.length; ++i < l; ){
                 val     = ws[i].getLastResult();
+
+                //TODO: watcher must have userData!
+                // if it doesn't, it was taken from cache and it is wrong
+                // because -rl flags may be different
+                rec     = self.recursive || (ws[i].userData && ws[i].userData.recursive);
                 if (val === undf) {
                     val = "";
                 }
-                ch.push((rec && factory(scope, val, self, null, true)) || val);
+                ch.push((rec && factory(scope, val, {parent: self, recursive: true})) || val);
             }
         },
 
@@ -5327,6 +5450,9 @@ var child           = require("child_process"),
 
 
 
+var minify = require('html-minifier').minify;
+
+
 var Builder         = function(action, projectFile) {
 
     if (!isFile(projectFile) && !(projectFile instanceof JsonFile)) {
@@ -5396,6 +5522,12 @@ Builder.prototype   = {
             if (!tpl) {
                 continue;
             }
+
+            tpl = minify(tpl, {
+                collapseWhitespace: true,
+                collapseInlineTagWhitespace: true,
+                removeComments: false
+            });
 
             tplUrl = filePath;
 

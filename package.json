@@ -15,6 +15,7 @@
     },
     "dependencies": {
         "closurecompiler": "*",
+        "html-minifier": "^3.5.8",
         "minimist": "*"
     },
     "scripts": {

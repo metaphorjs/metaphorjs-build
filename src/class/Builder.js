@@ -19,6 +19,9 @@ var fs              = require("fs"),
 
 
 
+var minify = require('html-minifier').minify;
+
+
 var Builder         = function(action, projectFile) {
 
     if (!isFile(projectFile) && !(projectFile instanceof JsonFile)) {
@@ -88,6 +91,12 @@ Builder.prototype   = {
             if (!tpl) {
                 continue;
             }
+
+            tpl = minify(tpl, {
+                collapseWhitespace: true,
+                collapseInlineTagWhitespace: true,
+                removeComments: false
+            });
 
             tplUrl = filePath;
 
