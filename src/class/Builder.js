@@ -161,7 +161,7 @@ Builder.prototype   = {
 
             for (m in rs) {
                 var req = rs[m];
-                if (typeof req == "string") {
+                if (typeof req === "string") {
                     content += "var " + req + " = " + "require" + "('" + m + "');\n"
                 }
                 else {
@@ -225,13 +225,13 @@ Builder.prototype   = {
             exposeIn = bld.exposeIn || "MetaphorJsExports";
             exportContent += "var " + exposeIn + " = {};\n";
 
-            if (bld.expose == "all") {
+            if (bld.expose === "all") {
                 var names = self.collectNames();
                 names.forEach(function(name){
-                    if (bld.exposeSkip && bls.exposeSkip.indexOf(name) != -1) {
+                    if (bld.exposeSkip && bls.exposeSkip.indexOf(name) !== -1) {
                         return;
                     }
-                    if (name != exposeIn) {
+                    if (name !== exposeIn) {
                         exposedNames.push([name, name]);
                         exportContent += exposeIn + "['" + name + "'] = " + name + ";\n";
                     }
@@ -243,7 +243,7 @@ Builder.prototype   = {
 
                 bld.expose.forEach(function (varName) {
 
-                    if (typeof varName == "string") {
+                    if (typeof varName === "string") {
                         exposedNames.push([varName, varName]);
                         exportContent += exposeIn + "['" + varName + "'] = " + varName + ";\n";
                     }
@@ -341,7 +341,7 @@ Builder.prototype   = {
 
         if (bld.wrap) {
             var wrap        = bld.wrap;
-            if (typeof wrap != "object") {
+            if (typeof wrap !== "object") {
                 wrap = {};
             }
             var wrapArgs    = "";
@@ -573,7 +573,7 @@ Builder.compileAll = function(noExit, noBuild) {
         item,
         next        = function(code) {
 
-            if (code != 0) {
+            if (code !== 0) {
                 deferred.reject(item[1] + " failed compiling with code " + code);
                 if (!noExit) {
                     process.exit(code);
