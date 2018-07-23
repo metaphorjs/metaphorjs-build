@@ -2,7 +2,7 @@
 var path = require("path"),
     fs = require("fs"),
     cp = require("child_process"),
-    Promise = require("metaphorjs-promise"),
+    Promise = require("metaphorjs-promise/src/lib/Promise.js"),
     parseArgs = require("minimist"),
 
     Git = require("./Git.js"),

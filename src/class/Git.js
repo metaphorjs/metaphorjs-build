@@ -1,6 +1,6 @@
 
 var cp = require("child_process"),
-    Promise = require("metaphorjs-promise"),
+    Promise = require("metaphorjs-promise/src/lib/Promise.js"),
 
     passthru = require("../func/passthru.js"),
 

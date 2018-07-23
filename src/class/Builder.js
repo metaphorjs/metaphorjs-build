@@ -15,7 +15,7 @@ var fs              = require("fs"),
     TextRenderer    = require("metaphorjs/src/class/TextRenderer.js"),
     Scope           = require("metaphorjs/src/lib/Scope.js"),
 
-    Promise         = require("metaphorjs-promise");
+    Promise         = require("metaphorjs-promise/src/lib/Promise.js");
 
 
 
