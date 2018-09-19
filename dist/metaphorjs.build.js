@@ -1,4 +1,10 @@
-var __MetaphorJsPrebuilt = {};
+/* BUNDLE START 002 */
+var fs, path, esprima, glob, cp;
+fs = require("fs");
+path = require("path");
+esprima = require("esprima");
+glob = require("glob");
+cp = require("child_process");
 
 
 var MetaphorJs = {
@@ -6,6 +12,10 @@ var MetaphorJs = {
 
 };
 
+
+function isFunction(value) {
+    return typeof value == 'function';
+};
 
 var toString = Object.prototype.toString;
 
@@ -90,1083 +100,6 @@ function isArray(value) {
     return typeof value === "object" && varType(value) === 5;
 };
 
-
-var fs              = require("fs"),
-    path            = require("path");
-
-
-var JsonFile = function(){
-
-    var insertVars = function(string, root) {
-
-        return string.replace(/@{([^}]+)}/ig, function(match, key) {
-
-            if (root[key]) {
-                return root[key];
-            }
-            else {
-                return "";
-            }
-        });
-    };
-
-    var prepareData = function(data, root) {
-
-        var k, val, i, l;
-
-        for (k in data) {
-
-            val = data[k];
-
-            if (isString(val)) {
-                data[k] = insertVars(val, root);
-            }
-            else if (isArray(val)) {
-                for (i = 0, l = val.length; i < l; i++) {
-                    prepareData(data[k][i], root);
-                }
-            }
-            else if (val && typeof val == "object") {
-                prepareData(data[k], root);
-            }
-        }
-    };
-
-
-    var JsonFile = function(jsonFilePath) {
-
-        var self    = this;
-
-        self.path   = path.normalize(jsonFilePath);
-        self.base   = path.dirname(self.path) + '/';
-        self.build  = {};
-        self.test   = [];
-        self.push   = [];
-        self.mixin  = {};
-
-        var json    = require(self.path),
-            key;
-
-        prepareData(json, json);
-
-        for (key in json) {
-            self[key] = json[key];
-        }
-    };
-
-    JsonFile.prototype = {
-
-        /**
-         * @type {string}
-         */
-        path: null,
-
-        /**
-         * @type {string}
-         */
-        base: null,
-
-        /**
-         * @type {string}
-         */
-        target: null,
-
-        /**
-         * @type {bool}
-         */
-        compile: true,
-
-        /**
-         * @type {[]}
-         */
-        test: null,
-
-        /**
-         * @type {string}
-         */
-        version: null,
-
-        /**
-         * @type {[]}
-         */
-        push: null,
-
-        /**
-         * @type {Object}
-         */
-        mixin: null,
-
-        /**
-         * @type {Object}
-         */
-        build: null
-    };
-
-    var all = {};
-
-    JsonFile.get = function(filePath) {
-        filePath = path.normalize(filePath);
-        if (!all[filePath]) {
-            all[filePath] = new JsonFile(filePath);
-        }
-        return all[filePath];
-    };
-
-
-    return JsonFile;
-
-}();
-
-
-
-
-var isDir = function(dirPath) {
-    return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
-};
-
-
-
-var resolvePath = function(toResolve, locations, resolveDir) {
-
-    if (toResolve.indexOf("./") !== 0 &&
-        toResolve.indexOf("../") !== 0 &&
-        toResolve.indexOf("*") === -1 &&
-        toResolve.indexOf("/") === -1 &&
-        toResolve.indexOf(".js") !== toResolve.length - 3) {
-        return true;
-    }
-
-    locations = locations || [];
-
-    if (process.env.METAPHORJS_PATH) {
-        locations.push(process.env.METAPHORJS_PATH);
-    }
-    if (process.env.NODE_PATH) {
-        locations = locations.concat(process.env.NODE_PATH.split(path.delimiter));
-    }
-
-    var norm = toResolve,
-        inx,
-        i, l,
-        loc,
-        dirMode = !!resolveDir,
-        abs = norm.substr(0, 1) === "/";
-
-    while ((inx = norm.indexOf('*')) !== -1) {
-        norm = norm.substr(0, inx);
-        norm = norm.split('/');
-        norm.pop();
-        norm = norm.join("/");
-        dirMode = true;
-    }
-
-    if (abs) {
-        if (fs.existsSync(norm)) {
-            if (dirMode || !isDir(norm)) {
-                return path.normalize(norm) + toResolve.replace(norm, "");
-            }
-        }
-    }
-
-    for (i = 0, l = locations.length; i < l; i++) {
-        loc = locations[i];
-
-        if (loc.substr(loc.length - 1) !== '/') {
-            loc += '/';
-        }
-
-        if (fs.existsSync(loc + norm)) {
-            if (dirMode || !isDir(loc + norm)) {
-                return path.normalize(loc + norm) + toResolve.replace(norm, "");
-            }
-        }
-    }
-
-    try {
-        var resolved = require.resolve(toResolve);
-        if (resolved === toResolve) {
-            return true;
-        }
-        return resolved;
-    }
-    catch (thrown) {}
-
-    return false;
-};
-
-
-var nextUid = function(){
-    var uid = ['0', '0', '0'];
-
-    // from AngularJs
-    /**
-     * @returns {String}
-     */
-    return function nextUid() {
-        var index = uid.length;
-        var digit;
-
-        while(index) {
-            index--;
-            digit = uid[index].charCodeAt(0);
-            if (digit == 57 /*'9'*/) {
-                uid[index] = 'A';
-                return uid.join('');
-            }
-            if (digit == 90  /*'Z'*/) {
-                uid[index] = '0';
-            } else {
-                uid[index] = String.fromCharCode(digit + 1);
-                return uid.join('');
-            }
-        }
-        uid.unshift('0');
-        return uid.join('');
-    };
-}();
-
-
-
-
-
-
-var File = function(){
-
-
-    var rStrict         = new RegExp("'use "+ "strict'|" + '"use ' + 'strict";?', "g"),
-        rRequires       = /([^\s]+)\s*=\s*require\(['|"]([^)]+)['|"]\)\s*,?/,
-        rInclude        = /[^=\s]?\s*(require\(['|"]([^)]+)['|"]\);?)/,
-        rEmptyVar       = /var[\s|,]*;/g,
-        rVarSpace       = /var\s+/g,
-        rTrailComma     = /,\s*;/g,
-
-
-
-        allFiles        = {},
-
-        getOrCreate     = function(file) {
-
-            if (!allFiles[file]) {
-                allFiles[file] = new File(file);
-            }
-
-            return allFiles[file];
-        };
-
-
-
-
-    var File = function(filePath, temporary) {
-
-        var self    = this;
-
-        self.id         = "_f_" + nextUid();
-        self.base       = path.dirname(filePath) + "/";
-        self.path       = filePath;
-        self.as         = [];
-        self.requires   = [];
-        self.requiredBy = [];
-        self.localRequires = [];
-
-        self.reqNames   = {};
-
-        self.temporary  = temporary;
-
-        self.process();
-        self.findUnused();
-    };
-
-    File.prototype = {
-
-        id: null,
-        base: null,
-        path: null,
-        content: "",
-        as: null,
-        requires: null,
-        requiredBy: null,
-        processed: false,
-        reqNames: null,
-
-        requiresUniqueAlias: false,
-        localRequires: null,
-        wrap: false,
-        temporary: false,
-
-        /**
-         * @param {Object} options
-         * @returns {string}
-         */
-        getContent: function(options) {
-
-            var self        = this,
-                content     = self.content,
-                as          = self.as.slice(),
-                inx,
-                match,
-                name, funcName;
-
-            //if (!as.length) {
-            //    self.addAs("*");
-            //    as          = self.as.slice();
-            //}
-
-            options = options || {};
-
-            if (this.requiresUniqueAlias) {
-                as.push(this.id);
-            }
-
-            if (!options.keepExports && content.indexOf("module.exports") != -1) {
-
-                if (options.returnExports) {
-
-                    content     = content.replace(/module\.exports\s*=/, "return");
-
-                }
-                else {
-
-                    match       = /module\.exports\s*=\s*([^(\['"+. ]+)\s*;/.exec(content);
-                    name        = match ? match[1] : null;
-
-                    match       = /module\.exports\s*=\s*function\s+([^( ]+)/i.exec(content);
-                    funcName    = match ? match[1] : null;
-
-                    if (name && (inx = as.indexOf(name)) != -1) {
-                        as.splice(inx, 1);
-                    }
-
-                    if (name && as.length == 0) {
-                        content = content.replace(/module\.exports\s*=\s*[^;]+;/, "");
-                    }
-                    else {
-
-                        if (as.length == 0 || (funcName && as.length == 1 && as[0] == funcName)) {
-                            content = content.replace(/module\.exports\s*=\s*/, "");
-                            //throw "No export names found for " + self.path + "; required by: " + self.requiredBy.join(", ");
-                        }
-                        else {
-
-                            if (as.length > 1) {
-                                content = "var " + as.join(", ") + ";\n" + content;
-                                content = content.replace("module.exports", as.join(" = "));
-                            }
-                            else {
-                                content = content.replace("module.exports", "var " + as[0]);
-                            }
-                        }
-                    }
-                }
-
-                //if (this.wrap) {
-                //    content = "(function(){\n"+content+"\n}());";
-                //}
-
-                content = content.replace(rStrict, "");
-            }
-
-            return content;
-        },
-
-        process:function() {
-
-            var self        = this,
-                content     = fs.readFileSync(self.path).toString(),
-                base        = self.base,
-                start       = 0,
-                required,
-                matches;
-
-            if (self.processed) {
-                return;
-            }
-
-            while (matches = rRequires.exec(content.substr(start))) {
-
-                required    = resolvePath(matches[2], [base]);
-
-                if (required === true) {
-                    start += matches.index + matches[2].length;
-                    continue;
-                }
-                else if (required === false) {
-                    throw matches[2] + " required in " + self.path + " does not exist";
-                }
-
-                content     = content.replace(matches[0], "");
-
-                self.reqNames[matches[1]] = required;
-
-                required    = getOrCreate(required);
-                required.addAs(matches[1]);
-
-                if (required.doesRequire(self.path)) {
-                    throw "Two files require each other: " + required.path + " <-> " + self.path;
-                }
-
-                self.addRequired(required.path);
-                required.addRequiredBy(self.path);
-            }
-
-            content = content.replace(rEmptyVar, "");
-            content = content.replace(rTrailComma, ";");
-            start   = 0;
-
-            while (matches = rInclude.exec(content.substr(start))) {
-
-                required    = resolvePath(matches[2], [base]);
-
-                if (required === true) {
-                    start += matches[2].length;
-                    continue;
-                }
-                else if (required === false) {
-                    throw matches[2] + " required in " + self.path + " does not exist";
-                }
-
-                content     = content.replace(matches[1], "");
-                required    = getOrCreate(required);
-
-                if (required.doesRequire(self.path)) {
-                    throw "Two files require each other: " + required.path + " <-> " + self.path;
-                }
-
-                self.addRequired(required.path);
-                required.addRequiredBy(self.path);
-            }
-
-
-            self.content    = content;
-            self.processed  = true;
-        },
-
-        doesRequire: function(file) {
-            return this.requires.indexOf(file) != -1;
-        },
-
-        addRequired: function(file) {
-            var self = this;
-
-            if (self.requires.indexOf(file) == -1) {
-                self.requires.push(file);
-            }
-        },
-
-        addLocalRequired: function(desiredName, fileId) {
-            this.localRequires.push({
-                desiredName: desiredName,
-                fileId: fileId
-            })
-        },
-
-        addRequiredBy: function(file) {
-            this.requiredBy.push(file);
-        },
-
-
-        getDefaultAlias: function() {
-            var as = path.basename(this.path, ".js");
-            if (as.indexOf(".") != -1 || as.indexOf("-") != -1) {
-                return null;
-            }
-            return as;
-        },
-
-        addAs: function(as) {
-            var self = this;
-
-            if (as == "*") {
-                as = self.getDefaultAlias();
-                if (!as) {
-                    return;
-                }
-            }
-
-            if (as && self.as.indexOf(as) == -1) {
-                self.as.push(as);
-            }
-        },
-
-        removeAs: function(as) {
-            var self = this,
-                inx;
-            if ((inx = self.as.indexOf(as)) != -1) {
-                self.as.splice(inx,1);
-            }
-        },
-
-        findUnused: function() {
-            var self        = this,
-                content     = self.content,
-                name,
-                reg;
-
-            for (name in self.reqNames) {
-
-                reg = new RegExp('[^a-zA-Z0-9]'+name+'[^a-zA-Z0-9]');
-
-                if (!content.match(reg)) {
-                    console.log("Unused requirement " + name + " in " + self.path);
-                }
-            }
-        },
-
-        needsWrapping: function() {
-
-        }
-    };
-
-    File.getOrCreate = getOrCreate;
-
-    File.exists = function(filePath) {
-        return !!allFiles[filePath];
-    };
-
-    File.get = function(filePath) {
-        return allFiles[filePath];
-    };
-
-    File.removeDupReqs = function(content) {
-
-        var matches,
-            required,
-            name,
-            start = 0,
-            used = {};
-
-        while (matches = rRequires.exec(content.substr(start))) {
-
-            name        = matches[1];
-            required    = matches[2];
-
-            if (used[name]) {
-                content = content.substr(0, start + matches.index) +
-                          content.substr(start + matches.index + matches[0].length);
-            }
-            else {
-                used[name] = true;
-                start += matches.index + matches[0].length;
-            }
-        }
-
-        content = content.replace(rEmptyVar, "");
-        content = content.replace(rTrailComma, ";");
-        content = content.replace(rVarSpace, "var ");
-
-        return content;
-    };
-
-    return File;
-
-}();
-
-
-
-var isFile = function(filePath) {
-    return fs.existsSync(filePath) && fs.lstatSync(filePath).isFile();
-};
-
-
-
-var getFileList = function(directory, ext) {
-
-    var fileList,
-        filePath,
-        levels = 0,
-        files = [];
-
-    if (!directory) {
-        return [];
-    }
-
-
-    if (directory.substr(directory.length - 1) == "*") {
-        levels++;
-    }
-    if (directory.substr(directory.length - 2) == "**") {
-        levels++;
-    }
-
-    if (levels) {
-        directory = directory.substr(0, directory.length - (levels + 1));
-    }
-    directory = path.normalize(directory);
-
-    var readDir = function(dir) {
-        fileList    = fs.readdirSync(dir);
-
-        fileList.forEach(function(filename) {
-            filePath = path.normalize(dir + "/" + filename);
-
-            if (isFile(filePath)) {
-
-                if (!ext) {
-                    files.push(filePath);
-                }
-                else if (typeof ext == "string" && path.extname(filePath).substr(1) == ext) {
-                    files.push(filePath);
-                }
-                else if (typeof ext != "string" && path.extname(filePath).substr(1).match(ext)) {
-                    files.push(filePath);
-                }
-            }
-            else if (isDir(filePath) && levels > 1) {
-                readDir(filePath);
-            }
-        });
-    };
-
-    if (levels > 0 || isDir(directory)) {
-        readDir(directory);
-    }
-    else {
-        files    = [directory];
-    }
-
-    return files;
-};
-
-
-
-
-var Build = function(jsonFile, name) {
-
-    var self    = this;
-
-    self.name           = name;
-    self.jsonFile       = jsonFile;
-    self.files          = [];
-    self.fileOptions    = {};
-    self.templates      = [];
-
-    var raw = typeof name === "string" ?
-                jsonFile.build[name] || jsonFile.mixin[name] :
-                name,
-        key;
-
-    if (raw) {
-        for (key in raw) {
-            self[key] = raw[key];
-        }
-
-        self.collectFiles(raw);
-        self.prepareBuildList();
-    }
-};
-
-Build.prototype = {
-
-    /**
-     * @type {string}
-     */
-    name: null,
-
-    /**
-     * @type {JsonFile}
-     */
-    jsonFile: null,
-
-    /**
-     * @type {[]}
-     */
-    files: null,
-
-    /**
-     * @type {[]}
-     */
-    templates: null,
-
-    /**
-     * @type {[]}
-     */
-    buildList: null,
-
-    /**
-     * @type {bool}
-     */
-    wrap: false,
-
-    /**
-     * @type {string}
-     */
-    target: "",
-
-    /**
-     * @type {string}
-     */
-    specificTarget: null,
-
-    /**
-     * @type {bool}
-     */
-    compile: true,
-
-    /**
-     * @type {Object}
-     */
-    allOmits: null,
-
-    /**
-     * @type {Object}
-     */
-    allReplaces: null,
-
-    /**
-     * @type {object}
-     */
-    fileOptions: null,
-
-    collectFiles: function(raw) {
-
-        var self        = this,
-            all         = {},
-            allTpls     = {},
-            allTplsCnt  = 0,
-            allFiles    = [],
-            allOmits    = {},
-            allReplaces = {},
-
-            addFile = function(path, props, temporary) {
-
-                if (!all[path]) {
-                    all[path] = props || {};
-                }
-                else {
-                    var oldProps = all[path];
-                    if (!oldProps) {
-                        all[path] = props;
-                    }
-                    else {
-                        var key, oldVal;
-                        for (key in props) {
-                            if (typeof oldProps[key] === "undefined") {
-                                oldProps[key] = props[key];
-                            }
-                            else if (key === "as") {
-                                oldVal = oldProps[key];
-                                if (typeof oldVal === "string") {
-                                    oldProps[key] = [oldVal];
-                                }
-                                oldProps[key].push(props[key]);
-                            }
-                        }
-                    }
-                }
-
-                if (temporary) {
-                    all[path].temporary = true;
-                }
-            },
-
-            addTplFile = function(path, props, jsonFile) {
-                if (!allTpls[path]) {
-                    props = props || {};
-                    if (props.root) {
-                        props.root = resolvePath(props.root, [jsonFile.base], true);
-                        if (props.root.substr(props.root.length - 1) !== '/') {
-                            props.root += '/';
-                        }
-                    }
-                    allTpls[path] = props;
-                    allTplsCnt++;
-                }
-            },
-
-            getMixin = function(jsonFile, name) {
-                return jsonFile.mixin[name] || {};
-            },
-
-            renderMixin = function(jsonFile, name, props) {
-
-                var raw = jsonFile.build[name] || jsonFile.mixin[name],
-                    ext = raw.extension || "js",
-                    tmp = "/tmp/mjs-build-tmp-" + (new Date).getTime() + "." + ext,
-                    r = require,
-                    Builder = typeof Builder === "undefined" ? r("./Builder.js") : Builder;
-
-                raw.specificTarget = tmp;
-
-                var builder = new Builder(raw, jsonFile);
-                builder.build();
-
-                addFile(tmp, props);
-            },
-
-            processMixin = function(mixin, jsonFile, props) {
-
-                var files   = mixin.files || [],
-                    omit    = mixin.omit || [],
-                    replace = mixin.replace || [],
-                    mixins  = mixin.mixins || [],
-                    tpls    = mixin.templates || [],
-                    base    = jsonFile.base,
-                    ext     = mixin.extension || "js";
-
-
-                mixins.forEach(function(item){
-                    if (typeof item === "string") {
-                        processMixin(getMixin(jsonFile, item), jsonFile);
-                    }
-                    else {
-                        var json = JsonFile.get(resolvePath(item[0], [base]));
-                        processMixin(getMixin(json, item[1]), json);
-                    }
-                });
-
-                omit.forEach(function(omitFile){
-                    getFileList(resolvePath(omitFile, [base]), ext)
-                        .forEach(function(omitFile){
-                            allOmits[omitFile] = true;
-                        });
-                });
-
-                replace.forEach(function(row){
-                    allReplaces[resolvePath(row[0], [base])] = resolvePath(row[1], [base]);
-                });
-
-                files.forEach(function(file){
-                    processFileItem(file, jsonFile);
-                });
-
-                tpls.forEach(function(file){
-                    processTplItem(file, jsonFile);
-                });
-            },
-
-            processTplItem = function(fileDef, jsonFile) {
-
-                if (typeof fileDef === "string") {
-                    fileDef = [fileDef];
-                }
-
-                var file    = fileDef[0],
-                    ext;
-
-                ext = path.extname(file).substr(1) || /^html|tpl$/;
-                getFileList(resolvePath(file, [jsonFile.base]), ext)
-                    .forEach(function(file){
-                        addTplFile(file, fileDef[1], jsonFile);
-                    });
-            },
-
-            processFileItem = function(fileDef, jsonFile){
-
-                if (typeof fileDef === "string") {
-                    fileDef = [fileDef];
-                }
-
-                var file    = fileDef[0],
-                    json,
-                    ext;
-
-                // mixin
-                if (file.indexOf('.') === -1 && file.indexOf('*') === -1) {
-                    if (fileDef[1]) {
-                        renderMixin(jsonFile, file, fileDef[1]);
-                    }
-                    else {
-                        processMixin(getMixin(jsonFile, file), jsonFile);
-                    }
-                }
-                else if (path.extname(file) === ".json") {
-                    json = JsonFile.get(resolvePath(file, [jsonFile.base]));
-                    if (fileDef[2]) {
-                        renderMixin(json, fileDef[1], fileDef[2]);
-                    }
-                    else {
-                        processMixin(getMixin(json, fileDef[1]), json);
-                    }
-                }
-                else {
-                    ext = path.extname(file).substr(1) || jsonFile.extension || "js";
-                    getFileList(resolvePath(file, [jsonFile.base]), ext)
-                        .forEach(function(file){
-                            addFile(file, fileDef[1]);
-                        });
-                }
-            };
-
-        processMixin(raw, self.jsonFile);
-
-        var file;
-
-        for (file in all) {
-            while (allReplaces[file]) {
-                file = allReplaces[file];
-            }
-            if (!allOmits[file]) {
-                allFiles.push([file, all[file] || {}]);
-
-                if (all[file]) {
-                    self.fileOptions[file] = all[file];
-                }
-            }
-        }
-
-        self.allOmits = allOmits;
-        self.allReplaces = allReplaces;
-        self.files = allFiles;
-        self.templates = allTplsCnt > 0 ? allTpls : null;
-    },
-
-    prepareBuildList: function() {
-
-        var self        = this,
-            buildList   = [],
-            included    = {},
-            stack       = [],
-            omit        = self.allOmits,
-            replace     = self.allReplaces;
-
-        var processFile = function(file) {
-
-            stack.push(file.path);
-
-            if (stack.length > 50) {
-                console.log(stack);
-                throw "Recursive requirement";
-            }
-
-            file.requires.forEach(function(requiredFile){
-                while (replace[requiredFile]) {
-                    requiredFile = replace[requiredFile];
-                }
-                if (!omit[requiredFile]) {
-                    processFile(File.get(requiredFile));
-                }
-            });
-
-            if (!included[file.path]) {
-                included[file.path] = true;
-                buildList.push(file.path);
-            }
-
-            stack.pop();
-        };
-
-        this.files.forEach(function(filePath){
-            processFile(File.getOrCreate(filePath[0]));
-        });
-
-        var options = self.fileOptions,
-            allAliases = {};
-        
-        var addAlias = function(file, as) {
-
-            if (as === "*") {
-                as = file.getDefaultAlias();
-            }
-
-            if (!as) {
-                return;
-            }
-
-            // alias is already occupied
-            // in this build
-            if (allAliases[as] && allAliases[as] !== file.path) {
-
-                throw "Non unique alias \"" + as + "\" Found in " +
-                        allAliases[as] + " and " + file.path;
-            }
-            else {
-                allAliases[as] = file.path;
-                file.addAs(as);
-            }
-        };
-
-        buildList.forEach(function(filePath){
-
-            var opt = options[filePath],
-                file;
-
-            if (opt && opt.as) {
-                file = File.getOrCreate(filePath);
-                if (typeof opt.as === "string") {
-                    //file.addAs(opt.as, allAliases);
-                    addAlias(file, opt.as);
-                }
-                else {
-                    opt.as.forEach(function(as) {
-                        addAlias(file, as);
-                        //file.addAs(as, allAliases);
-                    });
-                }
-            }
-
-        });
-
-        this.buildList = buildList;
-    }
-
-};
-
-
-
-
-
-
-
-/**
- * @param {function} fn
- */
-var eachProject = function(fn) {
-
-    var cwd     = process.cwd(),
-        dirs    = fs.readdirSync(cwd),
-        pf,
-        project,
-        eachDir = function(dir){
-
-            dir     = dir ? cwd + "/" + dir : cwd;
-            pf      = dir + "/metaphorjs.json";
-
-            if (isDir(dir) && isFile(pf)) {
-                project   = require(pf);
-                fn(project, pf);
-            }
-        };
-
-
-    eachDir("");
-    dirs.forEach(eachDir);
-};
-
-
-
-/**
- * @function trim
- * @param {String} value
- * @returns {string}
- */
-var trim = function() {
-    // native trim is way faster: http://jsperf.com/angular-trim-test
-    // but IE doesn't have it... :-(
-    if (!String.prototype.trim) {
-        return function(value) {
-            return isString(value) ? value.replace(/^\s\s*/, '').replace(/\s\s*$/, '') : value;
-        };
-    }
-    return function(value) {
-        return isString(value) ? value.trim() : value;
-    };
-}();
-
-/**
- * @param {Function} fn
- * @param {*} context
- */
-var bind = Function.prototype.bind ?
-              function(fn, context){
-                  return fn.bind(context);
-              } :
-              function(fn, context) {
-                  return function() {
-                      return fn.apply(context, arguments);
-                  };
-              };
-
-
-
 var strUndef = "undefined";
 
 
@@ -1187,8 +120,11 @@ var Cache = function(){
 
     /**
      * @class Cache
-     * @param {bool} cacheRewritable
+     */
+
+    /**
      * @constructor
+     * @param {bool} cacheRewritable
      */
     var Cache = function(cacheRewritable) {
 
@@ -1570,14 +506,12 @@ var Namespace = function(){
         self.destroy    = destroy;
     };
 
-    Namespace.prototype.register = null;
-    Namespace.prototype.exists = null;
-    Namespace.prototype.get = null;
-    Namespace.prototype.add = null;
-    Namespace.prototype.remove = null;
-    Namespace.prototype.normalize = null;
-    Namespace.prototype.makeAlias = null;
-    Namespace.prototype.destroy = null;
+    var p = Namespace.prototype;
+
+    p.register = p.exists = p.get = p.add = 
+        p.remove = p.normalize = 
+        p.makeAlias = p.destroy = null;
+    p = null;
 
     var globalNs;
 
@@ -1600,182 +534,7 @@ var Namespace = function(){
 
 
 
-
-var ns  = new Namespace(MetaphorJs, "MetaphorJs");
-
-
-
-var nsGet = ns.get;
-
-
-
-var filterLookup = function(name) {
-    return nsGet("filter." + name, true);
-};
-
-
-
-/**
- * @param {*} list
- * @returns {[]}
- */
-function toArray(list) {
-    if (list && !list.length != undf && list !== ""+list) {
-        for(var a = [], i =- 1, l = list.length>>>0; ++i !== l; a[i] = list[i]){}
-        return a;
-    }
-    else if (list) {
-        return [list];
-    }
-    else {
-        return [];
-    }
-};
-
-function isFunction(value) {
-    return typeof value == 'function';
-};
-
-/**
- * @param {string} str
- * @param {string} separator
- * @param {bool} allowEmpty
- * @returns {[]}
- */
-var split = function(str, separator, allowEmpty) {
-
-    var l       = str.length,
-        sl      = separator.length,
-        i       = 0,
-        prev    = 0,
-        prevChar= "",
-        inQDbl  = false,
-        inQSng  = false,
-        parts   = [],
-        esc     = "\\",
-        char;
-
-    if (!sl) {
-        return [str];
-    }
-
-    for (; i < l; i++) {
-
-        char = str.charAt(i);
-
-        if (char == esc) {
-            i++;
-            continue;
-        }
-
-        if (char == '"') {
-            inQDbl = !inQDbl;
-            continue;
-        }
-        if (char == "'") {
-            inQSng = !inQSng;
-            continue;
-        }
-
-        if (!inQDbl && !inQSng) {
-            if ((sl == 1 && char == separator) ||
-                (sl > 1 && str.substring(i, i + sl) == separator)) {
-
-                if (str.substr(i - 1, sl) == separator ||
-                    str.substr(i + 1, sl) == separator) {
-
-                    if (!allowEmpty) {
-                        i += (sl - 1);
-                        continue;
-                    }
-                }
-
-                parts.push(str.substring(prev, i).replace(esc + separator, separator));
-                prev = i + sl;
-                i += (sl - 1);
-            }
-        }
-
-        prevChar = char;
-    }
-
-    parts.push(str.substring(prev).replace(esc + separator, separator));
-
-    return parts;
-};
-
-
-
-function isDate(value) {
-    return varType(value) === 10;
-};
-
-
-
-function isRegExp(value) {
-    return varType(value) === 9;
-};
-
-function isWindow(obj) {
-    return obj === window ||
-           (obj && obj.document && obj.location && obj.alert && obj.setInterval);
-};
-
-
-
-// from Angular
-
-var equals = function(){
-
-    var equals = function equals(o1, o2) {
-        if (o1 === o2) return true;
-        if (o1 === null || o2 === null) return false;
-        if (o1 !== o1 && o2 !== o2) return true; // NaN === NaN
-        var t1 = typeof o1, t2 = typeof o2, length, key, keySet;
-        if (t1 == t2) {
-            if (t1 == 'object') {
-                if (isArray(o1)) {
-                    if (!isArray(o2)) return false;
-                    if ((length = o1.length) == o2.length) {
-                        for(key=0; key<length; key++) {
-                            if (!equals(o1[key], o2[key])) return false;
-                        }
-                        return true;
-                    }
-                } else if (isDate(o1)) {
-                    return isDate(o2) && o1.getTime() == o2.getTime();
-                } else if (isRegExp(o1) && isRegExp(o2)) {
-                    return o1.toString() == o2.toString();
-                } else {
-                    if (isWindow(o1) || isWindow(o2) || isArray(o2)) return false;
-                    keySet = {};
-                    for(key in o1) {
-                        if (key.charAt(0) == '$' || isFunction(o1[key])) {//&& typeof o1[key] == "object") {
-                            continue;
-                        }
-                        //if (isFunction(o1[key])) {
-                        //    continue;
-                        //}
-                        if (!equals(o1[key], o2[key])) {
-                            return false;
-                        }
-                        keySet[key] = true;
-                    }
-                    for(key in o2) {
-                        if (!keySet.hasOwnProperty(key) &&
-                            key.charAt(0) != '$' &&
-                            o2[key] !== undf &&
-                            !isFunction(o2[key])) return false;
-                    }
-                    return true;
-                }
-            }
-        }
-        return false;
-    };
-
-    return equals;
-}();
+var slice = Array.prototype.slice;
 
 
 
@@ -1787,70 +546,6 @@ function isPlainObject(value) {
             value.constructor === Object;
 
 };
-
-
-
-var copy = function() {
-
-    var win = typeof window != strUndef ? window : null,
-        glob = typeof global != strUndef ? global : null;
-
-    var copy = function copy(source, dest){
-
-        if (win && source === win) {
-            throw new Error("Cannot copy window object");
-        }
-        if (glob && source === glob) {
-            throw new Error("Cannot copy global object");
-        }
-
-        if (!dest) {
-            dest = source;
-            if (source) {
-                if (isArray(source)) {
-                    dest = copy(source, []);
-                } else if (isDate(source)) {
-                    dest = new Date(source.getTime());
-                } else if (isRegExp(source)) {
-                    dest = new RegExp(source.source);
-                } else if (isPlainObject(source)) {
-                    dest = copy(source, {});
-                }
-            }
-        } else {
-            if (source === dest) {
-                throw new Error("Objects are identical");
-            }
-            if (isArray(source)) {
-                dest.length = 0;
-                for ( var i = 0, l = source.length; i < l; i++) {
-                    dest.push(copy(source[i]));
-                }
-            } else {
-                var key;
-                for (key in dest) {
-                    delete dest[key];
-                }
-                for (key in source) {
-                    if (source.hasOwnProperty(key)) {
-                        if (key.charAt(0) == '$' || isFunction(source[key])) {
-                            dest[key] = source[key];
-                        }
-                        else {
-                            dest[key] = copy(source[key]);
-                        }
-                    }
-                }
-            }
-        }
-        return dest;
-    };
-
-    return copy;
-}();
-
-
-var slice = Array.prototype.slice;
 
 function isBool(value) {
     return value === true || value === false;
@@ -1928,2113 +623,7 @@ var extend = function(){
 }();
 
 
-
-function isPrimitive(value) {
-    var vt = varType(value);
-    return vt < 3 && vt > -1;
-};
-
-function returnFalse() {
-    return false;
-};
-/**
- * @param {Function} fn
- * @param {Object} context
- * @param {[]} args
- * @param {number} timeout
- */
-function async(fn, context, args, timeout) {
-    return setTimeout(function(){
-        fn.apply(context, args || []);
-    }, timeout || 0);
-};
-
-
-
-
-var ObservableEvent = (function(){
-
-    /**
-     * This class is private - you can't create an event other than via Observable.
-     * See Observable reference.
-     * @class ObservableEvent
-     * @private
-     */
-    var ObservableEvent = function(name, returnResult, autoTrigger,
-                                   triggerFilter, filterContext) {
-
-        var self    = this;
-
-        self.name           = name;
-        self.listeners      = [];
-        self.map            = {};
-        self.hash           = nextUid();
-        self.uni            = '$$' + name + '_' + self.hash;
-        self.suspended      = false;
-        self.lid            = 0;
-
-        if (typeof returnResult === "object" && returnResult !== null) {
-            extend(self, returnResult, true, false);
-        }
-        else {
-            // first|last|all
-            self.returnResult = returnResult === undf ? null : returnResult;
-            self.autoTrigger = autoTrigger;
-            self.triggerFilter = triggerFilter;
-            self.filterContext = filterContext;
-        }
-    };
-
-
-    extend(ObservableEvent.prototype, {
-
-        name: null,
-        listeners: null,
-        map: null,
-        hash: null,
-        uni: null,
-        suspended: false,
-        lid: null,
-        returnResult: null,
-        autoTrigger: null,
-        lastTrigger: null,
-        triggerFilter: null,
-        filterContext: null,
-
-        /**
-         * Get event name
-         * @method
-         * @returns {string}
-         */
-        getName: function() {
-            return this.name;
-        },
-
-        /**
-         * @method
-         */
-        destroy: function() {
-            var self        = this,
-                k;
-
-            for (k in self) {
-                self[k] = null;
-            }
-        },
-
-        /**
-         * @method
-         * @param {function} fn Callback function { @required }
-         * @param {object} context Function's "this" object
-         * @param {object} options See Observable's on()
-         */
-        on: function(fn, context, options) {
-
-            if (!fn) {
-                return null;
-            }
-
-            context     = context || null;
-            options     = options || {};
-
-            var self        = this,
-                uni         = self.uni,
-                uniContext  = context || fn;
-
-            if (uniContext[uni] && !options.allowDupes) {
-                return null;
-            }
-
-            var id      = ++self.lid,
-                first   = options.first || false;
-
-            uniContext[uni]  = id;
-
-
-            var e = {
-                fn:         fn,
-                context:    context,
-                uniContext: uniContext,
-                id:         id,
-                called:     0, // how many times the function was triggered
-                limit:      0, // how many times the function is allowed to trigger
-                start:      1, // from which attempt it is allowed to trigger the function
-                count:      0, // how many attempts to trigger the function was made
-                append:     null, // append parameters
-                prepend:    null // prepend parameters
-            };
-
-            extend(e, options, true, false);
-
-            if (first) {
-                self.listeners.unshift(e);
-            }
-            else {
-                self.listeners.push(e);
-            }
-
-            self.map[id] = e;
-
-            if (self.autoTrigger && self.lastTrigger && !self.suspended) {
-                var prevFilter = self.triggerFilter;
-                self.triggerFilter = function(l){
-                    if (l.id === id) {
-                        return prevFilter ? prevFilter(l) !== false : true;
-                    }
-                    return false;
-                };
-                self.trigger.apply(self, self.lastTrigger);
-                self.triggerFilter = prevFilter;
-            }
-
-            return id;
-        },
-
-        /**
-         * @method
-         * @param {function} fn Callback function { @required }
-         * @param {object} context Function's "this" object
-         * @param {object} options See Observable's on()
-         */
-        once: function(fn, context, options) {
-
-            options = options || {};
-            options.limit = 1;
-
-            return this.on(fn, context, options);
-        },
-
-        /**
-         * @method
-         * @param {function} fn Callback function { @required }
-         * @param {object} context Callback context
-         */
-        un: function(fn, context) {
-
-            var self        = this,
-                inx         = -1,
-                uni         = self.uni,
-                listeners   = self.listeners,
-                id;
-
-            if (fn == parseInt(fn)) {
-                id      = parseInt(fn);
-            }
-            else {
-                context = context || fn;
-                id      = context[uni];
-            }
-
-            if (!id) {
-                return false;
-            }
-
-            for (var i = 0, len = listeners.length; i < len; i++) {
-                if (listeners[i].id === id) {
-                    inx = i;
-                    delete listeners[i].uniContext[uni];
-                    break;
-                }
-            }
-
-            if (inx === -1) {
-                return false;
-            }
-
-            listeners.splice(inx, 1);
-            delete self.map[id];
-            return true;
-        },
-
-        /**
-         * @method hasListener
-         * @return bool
-         */
-
-        /**
-         * @method
-         * @param {function} fn Callback function { @required }
-         * @param {object} context Callback context
-         * @return boolean
-         */
-        hasListener: function(fn, context) {
-
-            var self    = this,
-                listeners   = self.listeners,
-                id;
-
-            if (fn) {
-
-                context = context || fn;
-
-                if (!isFunction(fn)) {
-                    id  = parseInt(fn);
-                }
-                else {
-                    id  = context[self.uni];
-                }
-
-                if (!id) {
-                    return false;
-                }
-
-                for (var i = 0, len = listeners.length; i < len; i++) {
-                    if (listeners[i].id === id) {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-            else {
-                return listeners.length > 0;
-            }
-        },
-
-
-        /**
-         * @method
-         */
-        removeAllListeners: function() {
-            var self    = this,
-                listeners = self.listeners,
-                uni     = self.uni,
-                i, len;
-
-            for (i = 0, len = listeners.length; i < len; i++) {
-                delete listeners[i].uniContext[uni];
-            }
-            self.listeners   = [];
-            self.map         = {};
-        },
-
-        /**
-         * @method
-         */
-        suspend: function() {
-            this.suspended = true;
-        },
-
-        /**
-         * @method
-         */
-        resume: function() {
-            this.suspended = false;
-        },
-
-
-        _prepareArgs: function(l, triggerArgs) {
-            var args;
-
-            if (l.append || l.prepend) {
-                args    = slice.call(triggerArgs);
-                if (l.prepend) {
-                    args    = l.prepend.concat(args);
-                }
-                if (l.append) {
-                    args    = args.concat(l.append);
-                }
-            }
-            else {
-                args = triggerArgs;
-            }
-
-            return args;
-        },
-
-        /**
-         * @method
-         * @return {*}
-         */
-        trigger: function() {
-
-            var self            = this,
-                listeners       = self.listeners,
-                returnResult    = self.returnResult,
-                filter          = self.triggerFilter,
-                filterContext   = self.filterContext,
-                args;
-
-            if (self.suspended) {
-                return null;
-            }
-
-            if (self.autoTrigger) {
-                self.lastTrigger = slice.call(arguments);
-            }
-
-            if (listeners.length === 0) {
-                return null;
-            }
-
-            var ret     = returnResult === "all" || returnResult === "merge" ?
-                          [] : null,
-                q, l,
-                res;
-
-
-
-            if (returnResult === "first") {
-                q = [listeners[0]];
-            }
-            else {
-                // create a snapshot of listeners list
-                q = slice.call(listeners);
-            }
-
-            // now if during triggering someone unsubscribes
-            // we won't skip any listener due to shifted
-            // index
-            while (l = q.shift()) {
-
-                // listener may already have unsubscribed
-                if (!l || !self.map[l.id]) {
-                    continue;
-                }
-
-                args = self._prepareArgs(l, arguments);
-
-                if (filter && filter.call(filterContext, l, args, self) === false) {
-                    continue;
-                }
-
-                if (l.filter && l.filter.apply(l.filterContext || l.context, args) === false) {
-                    continue;
-                }
-
-                l.count++;
-
-                if (l.count < l.start) {
-                    continue;
-                }
-
-                if (l.async) {
-                    res = null;
-                    async(l.fn, l.context, args);
-                }
-                else {
-                    res = l.fn.apply(l.context, args);
-                }
-
-                l.called++;
-
-                if (l.called === l.limit) {
-                    self.un(l.id);
-                }
-
-                if (returnResult === "all") {
-                    ret.push(res);
-                }
-                else if (returnResult === "merge" && res) {
-                    ret = ret.concat(res);
-                }
-                else if (returnResult === "first") {
-                    return res;
-                }
-                else if (returnResult === "nonempty" && res) {
-                    return res;
-                }
-                else if (returnResult === "last") {
-                    ret = res;
-                }
-                else if (returnResult === false && res === false) {
-                    return false;
-                }
-            }
-
-            if (returnResult) {
-                return ret;
-            }
-        }
-    }, true, false);
-
-
-    return ObservableEvent;
-}());
-
-
-
-
-var Observable = (function(){
-
-
-    /**
-     * @description A javascript event system implementing two patterns - observable and collector.
-     * @description Observable:
-     * @code examples/observable.js
-     *
-     * @description Collector:
-     * @code examples/collector.js
-     *
-     * @class Observable
-     * @version 1.2
-     * @author johann kuindji
-     * @link https://github.com/kuindji/metaphorjs-observable
-     */
-    var Observable = function() {
-
-        this.events = {};
-
-    };
-
-
-    extend(Observable.prototype, {
-
-
-
-        /**
-        * You don't have to call this function unless you want to pass params other than event name.
-        * Normally, events are created automatically.
-        *
-        * @method createEvent
-        * @access public
-        * @param {string} name {
-        *       Event name
-        *       @required
-        * }
-        * @param {bool|string} returnResult {
-        *   false -- return first 'false' result and stop calling listeners after that<br>
-        *   "all" -- return all results as array<br>
-        *   "merge" -- merge all results into one array (each result must be array)<br>
-        *   "first" -- return result of the first handler (next listener will not be called)<br>
-        *   "nonempty" -- return first nonempty result<br>
-        *   "last" -- return result of the last handler (all listeners will be called)<br>
-        * }
-        * @param {bool} autoTrigger {
-        *   once triggered, all future subscribers will be automatically called
-        *   with last trigger params
-        *   @code examples/autoTrigger.js
-        * }
-        * @param {function} triggerFilter {
-        *   This function will be called each time event is triggered. Return false to skip listener.
-        *   @code examples/triggerFilter.js
-        *   @param {object} listener This object contains all information about the listener, including
-        *       all data you provided in options while subscribing to the event.
-        *   @param {[]} arguments
-        *   @return {bool}
-        * }
-        * @param {object} filterContext triggerFilter's context
-        * @return {ObservableEvent}
-        */
-
-        /**
-         * @method createEvent
-         * @param {string} name
-         * @param {object} options {
-         *  @type {string} returnResult
-         *  @type {bool} autoTrigger
-         *  @type {function} triggerFilter
-         *  @type {object} filterContext
-         * }
-         * @returns {ObservableEvent}
-         */
-        createEvent: function(name, returnResult, autoTrigger, triggerFilter, filterContext) {
-            name = name.toLowerCase();
-            var events  = this.events;
-            if (!events[name]) {
-                events[name] = new ObservableEvent(name, returnResult, autoTrigger, triggerFilter, filterContext);
-            }
-            return events[name];
-        },
-
-        /**
-        * @method
-        * @access public
-        * @param {string} name Event name
-        * @return {ObservableEvent|undefined}
-        */
-        getEvent: function(name) {
-            name = name.toLowerCase();
-            return this.events[name];
-        },
-
-        /**
-        * Subscribe to an event or register collector function.
-        * @method
-        * @access public
-        * @param {string} name {
-        *       Event name
-        *       @required
-        * }
-        * @param {function} fn {
-        *       Callback function
-        *       @required
-        * }
-        * @param {object} context "this" object for the callback function
-        * @param {object} options {
-        *       You can pass any key-value pairs in this object. All of them will be passed to triggerFilter (if
-        *       you're using one).
-        *       @type {bool} first {
-        *           True to prepend to the list of handlers
-        *           @default false
-        *       }
-        *       @type {number} limit {
-        *           Call handler this number of times; 0 for unlimited
-        *           @default 0
-        *       }
-        *       @type {number} start {
-        *           Start calling handler after this number of calls. Starts from 1
-        *           @default 1
-        *       }
-         *      @type {[]} append Append parameters
-         *      @type {[]} prepend Prepend parameters
-         *      @type {bool} allowDupes allow the same handler twice
-         *      @type {bool} async run eveny asynchronously
-        * }
-        */
-        on: function(name, fn, context, options) {
-            name = name.toLowerCase();
-            var events  = this.events;
-            if (!events[name]) {
-                events[name] = new ObservableEvent(name);
-            }
-            return events[name].on(fn, context, options);
-        },
-
-        /**
-        * Same as {@link Observable.on}, but options.limit is forcefully set to 1.
-        * @method
-        * @access public
-        */
-        once: function(name, fn, context, options) {
-            options     = options || {};
-            options.limit = 1;
-            return this.on(name, fn, context, options);
-        },
-
-
-        /**
-        * Unsubscribe from an event
-        * @method
-        * @access public
-        * @param {string} name Event name
-        * @param {function} fn Event handler
-        * @param {object} context If you called on() with context you must call un() with the same context
-        */
-        un: function(name, fn, context) {
-            name = name.toLowerCase();
-            var events  = this.events;
-            if (!events[name]) {
-                return;
-            }
-            events[name].un(fn, context);
-        },
-
-        /**
-         * @method hasListener
-         * @access public
-         * @return bool
-         */
-
-        /**
-        * @method hasListener
-        * @access public
-        * @param {string} name Event name { @required }
-        * @return bool
-        */
-
-        /**
-        * @method
-        * @access public
-        * @param {string} name Event name { @required }
-        * @param {function} fn Callback function { @required }
-        * @param {object} context Function's "this" object
-        * @return bool
-        */
-        hasListener: function(name, fn, context) {
-            var events = this.events;
-
-            if (name) {
-                name = name.toLowerCase();
-                if (!events[name]) {
-                    return false;
-                }
-                return fn ? events[name].hasListener(fn, context) : true;
-            }
-            else {
-                for (name in events) {
-                    if (events[name].hasListener()) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-        },
-
-        /**
-        * @method
-        * @access public
-        * @param {string} name Event name { @required }
-        * @return bool
-        */
-        hasEvent: function(name) {
-            return !!this.events[name];
-        },
-
-
-        /**
-        * Remove all listeners from all events
-        * @method removeAllListeners
-        * @access public
-        */
-
-        /**
-        * Remove all listeners from specific event
-        * @method
-        * @access public
-        * @param {string} name Event name { @required }
-        */
-        removeAllListeners: function(name) {
-            var events  = this.events;
-            if (name) {
-                if (!events[name]) {
-                    return;
-                }
-                events[name].removeAllListeners();
-            }
-            else {
-                for (name in events) {
-                    events[name].removeAllListeners();
-                }
-            }
-        },
-
-        /**
-        * Trigger an event -- call all listeners.
-        * @method
-        * @access public
-        * @param {string} name Event name { @required }
-        * @param {*} ... As many other params as needed
-        * @return mixed
-        */
-        trigger: function() {
-
-            var name = arguments[0],
-                events  = this.events;
-
-            name = name.toLowerCase();
-
-            if (!events[name]) {
-                return null;
-            }
-
-            var e = events[name];
-            return e.trigger.apply(e, slice.call(arguments, 1));
-        },
-
-        /**
-        * Suspend an event. Suspended event will not call any listeners on trigger().
-        * @method
-        * @access public
-        * @param {string} name Event name
-        */
-        suspendEvent: function(name) {
-            name = name.toLowerCase();
-            var events  = this.events;
-            if (!events[name]) {
-                return;
-            }
-            events[name].suspend();
-        },
-
-        /**
-        * @method
-        * @access public
-        */
-        suspendAllEvents: function() {
-            var events  = this.events;
-            for (var name in events) {
-                events[name].suspend();
-            }
-        },
-
-        /**
-        * Resume suspended event.
-        * @method
-        * @access public
-        * @param {string} name Event name
-        */
-        resumeEvent: function(name) {
-            name = name.toLowerCase();
-            var events  = this.events;
-            if (!events[name]) {
-                return;
-            }
-            events[name].resume();
-        },
-
-        /**
-        * @method
-        * @access public
-        */
-        resumeAllEvents: function() {
-            var events  = this.events;
-            for (var name in events) {
-                events[name].resume();
-            }
-        },
-
-        /**
-         * @method
-         * @access public
-         * @param {string} name Event name
-         */
-        destroyEvent: function(name) {
-            var events  = this.events;
-            if (events[name]) {
-                events[name].removeAllListeners();
-                events[name].destroy();
-                delete events[name];
-            }
-        },
-
-
-        /**
-        * Destroy observable
-        * @method
-        * @md-not-inheritable
-        * @access public
-        */
-        destroy: function() {
-            var self    = this,
-                events  = self.events;
-
-            for (var i in events) {
-                self.destroyEvent(i);
-            }
-
-            for (i in self) {
-                self[i] = null;
-            }
-        },
-
-        /**
-        * Although all methods are public there is getApi() method that allows you
-        * extending your own objects without overriding "destroy" (which you probably have)
-        * @code examples/api.js
-        * @method
-        * @md-not-inheritable
-        * @returns object
-        */
-        getApi: function() {
-
-            var self    = this;
-
-            if (!self.api) {
-
-                var methods = [
-                        "createEvent", "getEvent", "on", "un", "once", "hasListener", "removeAllListeners",
-                        "trigger", "suspendEvent", "suspendAllEvents", "resumeEvent",
-                        "resumeAllEvents", "destroyEvent"
-                    ],
-                    api = {},
-                    name;
-
-                for(var i =- 1, l = methods.length;
-                        ++i < l;
-                        name = methods[i],
-                        api[name] = bind(self[name], self)){}
-
-                self.api = api;
-            }
-
-            return self.api;
-
-        }
-    }, true, false);
-
-
-    return Observable;
-}());
-
-
-
-function levenshteinArray(from, to) {
-
-    var m = from.length,
-        n = to.length,
-        D = new Array(m + 1),
-        P = new Array(m + 1),
-        i, j, c,
-        route,
-        cost,
-        dist,
-        ops = 0;
-
-    if (m == n && m == 0) {
-        return {
-            changes: 0,
-            distance: 0,
-            prescription: []
-        };
-    }
-
-    for (i = 0; i <= m; i++) {
-        D[i]    = new Array(n + 1);
-        P[i]    = new Array(n + 1);
-        D[i][0] = i;
-        P[i][0] = 'D';
-    }
-    for (i = 0; i <= n; i++) {
-        D[0][i] = i;
-        P[0][i] = 'I';
-    }
-
-    for (i = 1; i <= m; i++) {
-        for (j = 1; j <= n; j++) {
-            cost = (!equals(from[i - 1], to[j - 1])) ? 1 : 0;
-
-            if(D[i][j - 1] < D[i - 1][j] && D[i][j - 1] < D[i - 1][j - 1] + cost) {
-                //Insert
-                D[i][j] = D[i][j - 1] + 1;
-                P[i][j] = 'I';
-            }
-            else if(D[i - 1][j] < D[i - 1][j - 1] + cost) {
-                //Delete
-                D[i][j] = D[i - 1][j] + 1;
-                P[i][j] = 'D';
-            }
-            else {
-                //Replace or noop
-                D[i][j] = D[i - 1][j - 1] + cost;
-                if (cost == 1) {
-                    P[i][j] = 'R';
-                }
-                else {
-                    P[i][j] = '-';
-                }
-            }
-        }
-    }
-
-    //Prescription
-    route = [];
-    i = m;
-    j = n;
-
-    do {
-        c = P[i][j];
-        route.push(c);
-        if (c != '-') {
-            ops++;
-        }
-        if(c == 'R' || c == '-') {
-            i --;
-            j --;
-        }
-        else if(c == 'D') {
-            i --;
-        }
-        else {
-            j --;
-        }
-    } while((i != 0) || (j != 0));
-
-    dist = D[m][n];
-
-    return {
-        changes: ops / route.length,
-        distance: dist,
-        prescription: route.reverse()
-    };
-};
-
-
-
-var error = (function(){
-
-    var listeners = [];
-
-    var error = function error(e) {
-
-        var i, l;
-
-        for (i = 0, l = listeners.length; i < l; i++) {
-            if (listeners[i][0].call(listeners[i][1], e) === false) {
-                return;
-            }
-        }
-
-        var stack = (e ? e.stack : null) || (new Error).stack;
-
-        if (typeof console != strUndef && console.error) {
-            async(function(){
-                if (e) {
-                    console.error(e);
-                }
-                if (stack) {
-                    console.error(stack);
-                }
-            });
-        }
-        else {
-            throw e;
-        }
-    };
-
-    error.on = function(fn, context) {
-        error.un(fn, context);
-        listeners.push([fn, context]);
-    };
-
-    error.un = function(fn, context) {
-        var i, l;
-        for (i = 0, l = listeners.length; i < l; i++) {
-            if (listeners[i][0] === fn && listeners[i][1] === context) {
-                listeners.splice(i, 1);
-                break;
-            }
-        }
-    };
-
-    return error;
-}());
-
-
-
-
 function emptyFn(){};
-
-
-
-var functionFactory = function() {
-
-    var REG_REPLACE_EXPR    = /((^|[^a-z0-9_$\]\)'"])|(this))(\.)([^0-9])/ig,
-        REG_REPLACER        = "$2____.$5",
-
-        f               = Function,
-        fnBodyStart     = 'try {',
-        getterBodyEnd   = ';} catch (thrownError) { return undefined; }',
-        setterBodyEnd   = ';} catch (thrownError) { return undefined; }',
-
-        getterCache     = {},
-        getterCacheCnt  = 0,
-
-        createGetter    = function createGetter(expr, returnAsCode) {
-
-            try {
-                if (!getterCache[expr] || returnAsCode) {
-                    getterCacheCnt++;
-
-                    var body = "".concat(
-                        fnBodyStart,
-                        'return ',
-                        expr.replace(REG_REPLACE_EXPR, REG_REPLACER),
-                        getterBodyEnd
-                    );
-
-                    if (returnAsCode) {
-                        return "function(____) {" + body + "}";
-                    }
-                    else {
-                        return getterCache[expr] = new f(
-                            '____',
-                            body
-                        );
-                    }
-                }
-                return getterCache[expr];
-            }
-            catch (thrownError){
-                error(thrownError);
-                return emptyFn;
-            }
-        },
-
-        setterCache     = {},
-        setterCacheCnt  = 0,
-
-        createSetter    = function createSetter(expr, returnAsCode) {
-            try {
-                if (!setterCache[expr] || returnAsCode) {
-                    setterCacheCnt++;
-                    var code = expr.replace(REG_REPLACE_EXPR, REG_REPLACER),
-                        body = "".concat(fnBodyStart, code, ' = $$$$', setterBodyEnd);
-
-                    if (returnAsCode) {
-                        return "function(____, $$$$) {" + body + "}";
-                    }
-                    else {
-                        return setterCache[expr] = new f(
-                            '____',
-                            '$$$$',
-                            body
-                        );
-                    }
-                }
-                return setterCache[expr];
-            }
-            catch (thrownError) {
-                error(thrownError);
-                return emptyFn;
-            }
-        },
-
-        funcCache       = {},
-        funcCacheCnt    = 0,
-
-        createFunc      = function createFunc(expr, returnAsCode) {
-            try {
-                if (!funcCache[expr] || returnAsCode) {
-                    funcCacheCnt++;
-
-                    var body = "".concat(
-                        fnBodyStart,
-                        expr.replace(REG_REPLACE_EXPR, REG_REPLACER),
-                        getterBodyEnd
-                    );
-
-                    if (returnAsCode) {
-                        return "function(____) {" + body + "}";
-                    }
-                    else {
-                        return funcCache[expr] = new f(
-                            '____',
-                            body
-                        );
-                    }
-                }
-                return funcCache[expr];
-            }
-            catch (thrownError) {
-                error(thrownError);
-                return emptyFn;
-            }
-        },
-
-        resetCache = function() {
-            getterCacheCnt >= 1000 && (getterCache = {});
-            setterCacheCnt >= 1000 && (setterCache = {});
-            funcCacheCnt >= 1000 && (funcCache = {});
-        };
-
-    return {
-        createGetter: createGetter,
-        createSetter: createSetter,
-        createFunc: createFunc,
-        resetCache: resetCache,
-        enableResetCacheInterval: function() {
-            setTimeout(resetCache, 10000);
-        }
-    };
-}();
-
-
-
-var createGetter = functionFactory.createGetter;
-
-
-
-
-var createSetter = functionFactory.createSetter;
-
-
-
-var Watchable = function(){
-
-    var isStatic    = function(val) {
-
-            if (!isString(val)) {
-                return true;
-            }
-
-            var first   = val.substr(0, 1),
-                last    = val.length - 1;
-
-            if (first === '"' || first === "'") {
-                if (val.indexOf(first, 1) === last) {
-                    return val.substring(1, last);
-                }
-            }
-
-            return false;
-        },
-
-        prescription2moves = function(a1, a2, prs, getKey) {
-
-            var newPrs = [],
-                i, l, k, action,
-                map1 = {},
-                prsi,
-                a2i,
-                index;
-
-            for (i = 0, l = a1.length; i < l; i++) {
-                k = getKey(a1[i]);
-                if (k) {
-                    map1[k] = i;
-                }
-            }
-
-            a2i = 0;
-            var used = {};
-
-            for (prsi = 0, l = prs.length; prsi < l; prsi++) {
-
-                action = prs[prsi];
-
-                if (action === 'D') {
-                    continue;
-                }
-
-                k = getKey(a2[a2i]);
-
-                if (k !== undf && used[k] !== true && (index = map1[k]) !== undf) {
-                    newPrs.push(index);
-                    used[k] = true;
-                }
-                else {
-                    newPrs.push(action);
-                }
-                a2i++;
-            }
-
-            return newPrs;
-        },
-
-
-        observable;
-
-    /**
-     * @class Watchable
-     */
-
-    /**
-     * @param {object} dataObj object containing observed property
-     * @param {string} code property name or custom code
-     * @param {function} fn optional listener
-     * @param {object} fnScope optional listener's "this" object
-     *  @subparam {*} userData optional data to pass to the listener
-     *  @subparam {function} filterLookup
-     *  @subparam {*} mock do not calculate real values, use mock instead
-     *  @subparam {function} predefined getter fn
-     * @param {object} opt
-     * @constructor
-     */
-    var Watchable   = function(dataObj, code, fn, fnScope, opt) {
-
-        if (!observable) {
-            observable  = new Observable;
-        }
-
-        opt = opt || {};
-
-        var self    = this,
-            id      = nextUid(),
-            type;
-
-        if (opt.filterLookup) {
-            self.filterLookup = opt.filterLookup;
-        }
-
-        self.mock = opt.mock;
-        self.origCode = code;
-
-        if (opt.mock && code.indexOf(".") === -1) {
-            type = "attr";
-        }
-        else if (code && dataObj) {
-            type    = dataObj.hasOwnProperty(code) ? "attr" : "expr";
-        }
-        else if (code && !dataObj) {
-            type = "expr";
-        }
-
-
-        if (fn) {
-            observable.on(id, fn, fnScope || this, {
-                append: [opt.userData],
-                allowDupes: true
-            });
-        }
-
-        if (type === "expr") {
-            code        = self._parsePipes(code, dataObj, true);
-            code        = self._parsePipes(code, dataObj, false);
-
-            if (self.inputPipes || self.pipes) {
-                code    = normalizeExpr(dataObj, code);
-                type    = dataObj.hasOwnProperty(code) ? "attr" : "expr";
-            }
-
-            if (self.staticValue = isStatic(code)) {
-                type    = "static";
-            }
-        }
-
-        self.userData   = opt.userData;
-        self.code       = code;
-        self.id         = id;
-        self.type       = type;
-        self.obj        = dataObj;
-
-        if (type === "expr") {
-            self.getterFn   = opt.getterFn || createGetter(code);
-        }
-
-        if (type !== "static" || self.pipes) {
-            self.curr = self.curr || self._getValue();
-            self.currCopy = isPrimitive(self.curr) ? self.curr : copy(self.curr);
-        }
-        else {
-            self.check = returnFalse;
-            self.curr = self.prev = self.staticValue;
-        }
-    };
-
-    extend(Watchable.prototype, {
-
-        //namespace: null,
-        //nsGet: null,
-
-        filterLookup: null,
-
-        staticValue: null,
-        origCode: null,
-        code: null,
-        getterFn: null,
-        setterFn: null,
-        id: null,
-        type: null,
-        obj: null,
-        itv: null,
-        curr: null,
-        currCopy: null,
-        prev: null,
-        unfilteredCopy: null,
-        unfiltered: null,
-        pipes: null,
-        inputPipes: null,
-        lastSetValue: null,
-        userData: null,
-        obsrvDelegate: null,
-        obsrvChanged: false,
-        forcePipes: false,
-
-        mock: false,
-
-        // means that pipes always return the same output given the same input.
-        // if you want to mark pipe as undeterministic - put ? before it
-        // {{ .somevalue | ?pipe }}
-        // then value will be passed through all pipes on each check.
-        deterministic: true,
-
-        getConfig: function() {
-            var getterFn = null;
-            if (this.type === "expr") {
-                getterFn   = createGetter(this.code, true);
-            }
-            return {
-                type: this.type,
-                code: this.origCode,
-                withoutPipes: this.code,
-                getter: getterFn,
-                hasPipes: this.pipes !== null,
-                hasInputPipes: this.inputPipes !== null
-            }
-        },
-
-        _indexArrayItems: function(a) {
-
-            var key = '$$' + this.id,
-                i, l, item;
-
-            if (a) {
-                for (i = 0, l = a.length; i < l; i++) {
-                    item = a[i];
-                    if (item && !isPrimitive(item) && !item[key]) {
-                        item[key] = nextUid();
-                    }
-                }
-            }
-        },
-
-
-        _parsePipes: function(text, dataObj, input) {
-
-            var self        = this,
-                separator   = input ? ">>" : "|",
-                propName    = input ? "inputPipes" : "pipes",
-                cb          = input ? self.onInputParamChange : self.onPipeParamChange;
-
-            if (text.indexOf(separator) === -1) {
-                return text;
-            }
-
-            var parts   = split(text, separator),
-                ret     = input ? parts.pop() : parts.shift(),
-                pipes   = [],
-                pipe,
-                i, l;
-
-            for(i = 0, l = parts.length; i < l; i++) {
-                pipe = split(trim(parts[i]), ':');
-                self._addPipe(pipes, pipe, dataObj, cb, false);
-            }
-
-            if (pipes.length) {
-                self[propName] = pipes;
-            }
-
-            return trim(ret);
-        },
-
-        prependInuptPipe: function() {
-            this.inputPipes = this.inputPipes || [];
-            this._addPipe(
-                this.inputPipes,
-                toArray(arguments),
-                this.obj,
-                this.onInputParamChange,
-                true
-            );
-        },
-        addInuptPipe: function() {
-            this.inputPipes = this.inputPipes || [];
-            this._addPipe(
-                this.inputPipes,
-                toArray(arguments),
-                this.obj,
-                this.onInputParamChange,
-                false
-            );
-        },
-
-        addPipe: function() {
-            this.pipes = this.pipes || [];
-            this._addPipe(
-                this.pipes,
-                toArray(arguments),
-                this.obj,
-                this.onPipeParamChange,
-                false
-            );
-        },
-        prependPipe: function() {
-            this.pipes = this.pipes || [];
-            this._addPipe(
-                this.pipes,
-                toArray(arguments),
-                this.obj,
-                this.onPipeParamChange,
-                true
-            );
-        },
-
-        _addPipe: function(pipes, pipe, dataObj, onParamChange, prepend) {
-
-            var self    = this,
-                name    = pipe.shift(),
-                fn      = isFunction(name) ? name : null,
-                ws      = [],
-                fchar   = fn ? null : name.substr(0,1),
-                opt     = {
-                    neg: false,
-                    dblneg: false,
-                    undeterm: false,
-                    name: name
-                },
-                i, l;
-
-            if (!fn) {
-                if (name.substr(0, 2) === "!!") {
-                    name = name.substr(2);
-                    opt.dblneg = true;
-                }
-                else {
-                    if (fchar === "!") {
-                        name = name.substr(1);
-                        opt.neg = true;
-                    }
-                    else if (fchar === "?") {
-                        name = name.substr(1);
-                        opt.undeterm = true;
-                    }
-                }
-            }
-            else {
-                opt.name = fn.name;
-            }
-
-            if (self.mock) {
-                fn      = function(){};
-            }
-            else {
-                if (!fn && self.filterLookup) {
-                    fn = self.filterLookup(name);
-                }
-                if (!fn) {
-                    fn = (typeof window !== "undefined" ? window[name] : null) || dataObj[name];
-                }
-            }
-
-            //console.log(!!self.nsGet, name, fn)
-
-            if (isFunction(fn)) {
-
-                for (i = -1, l = pipe.length; ++i < l;
-                     ws.push(create(
-                         dataObj,
-                         pipe[i],
-                         onParamChange,
-                         self,
-                         {
-                             filterLookup: self.filterLookup,
-                             mock: self.mock
-                         }
-                     ))) {}
-
-                if (fn.$undeterministic) {
-                    opt.undeterm = true;
-                }
-
-                pipes[prepend?"unshift":"push"]([fn, pipe, ws, opt]);
-
-                if (opt.undeterm) {
-                    self.deterministic = false;
-                }
-            }
-        },
-
-        _getRawValue: function() {
-            var self    = this,
-                val;
-
-            if (self.mock) {
-                return self.mock;
-            }
-
-            switch (self.type) {
-                case "static":
-                    val = self.staticValue;
-                    break;
-
-                case "attr":
-                    val = self.obj[self.code];
-                    break;
-                case "expr":
-                    val = self.getterFn(self.obj);
-                    break;
-                case "object":
-                    val = self.obj;
-                    break;
-            }
-
-            if (isArray(val)) {
-                if (!self.inputPipes) {
-                    self._indexArrayItems(val);
-                }
-                val = val.slice();
-            }
-
-            return val;
-        },
-
-        _getValue: function(useUnfiltered) {
-
-            var self    = this,
-                val     = useUnfiltered ? self.unfiltered : self._getRawValue();
-
-            self.unfiltered = val;
-
-            if (self.mock) {
-                val = self.mock;
-            }
-            else {
-                val = self._runThroughPipes(val, self.pipes);
-            }
-
-            return val;
-        },
-
-
-        _runThroughPipes: function(val, pipes) {
-
-            if (pipes) {
-                var j,
-                    args,
-                    exprs,
-                    self    = this,
-                    jlen    = pipes.length,
-                    dataObj = self.obj,
-                    opt,
-                    z, zl;
-
-                for (j = 0; j < jlen; j++) {
-                    exprs   = pipes[j][1];
-                    opt     = pipes[j][3];
-                    args    = [];
-                    for (z = -1, zl = exprs.length; ++z < zl;
-                         args.push(evaluate(exprs[z], dataObj))){}
-
-                    args.unshift(dataObj);
-                    args.unshift(val);
-
-                    val     = pipes[j][0].apply(null, args);
-
-                    if (opt.neg) {
-                        val = !val;
-                    }
-                    else if (opt.dblneg) {
-                        val = !!val;
-                    }
-                }
-            }
-
-            return val;
-        },
-
-        /**
-         * Subscribe to the change event
-         * @method
-         * @param {function} fn listener
-         * @param {object} fnScope listener's "this" object
-         * @param {object} options see Observable's options in on()
-         */
-        subscribe: function(fn, fnScope, options) {
-            observable.on(this.id, fn, fnScope, options);
-        },
-
-        /**
-         * Unsubscribe from change event
-         * @param {function} fn
-         * @param {object} fnScope
-         * @returns {*}
-         */
-        unsubscribe: function(fn, fnScope) {
-            return observable.un(this.id, fn, fnScope);
-        },
-
-        /**
-         * @returns {boolean}
-         */
-        hasPipes: function() {
-            return this.pipes !== null;
-        },
-
-        /**
-         * @returns {boolean}
-         */
-        hasInputPipes: function() {
-            return this.inputPipes != null;
-        },
-
-        /**
-         * @param {function|string} p
-         * @returns {boolean}
-         */
-        hasPipe: function(p) {
-            return this._hasPipe(this.pipes, p);
-        },
-
-        /**
-         * @param {function|string} p
-         * @returns {boolean}
-         */
-        hasInputPipe: function(p) {
-            return this._hasPipe(this.inputPipes, p);
-        },
-
-        /**
-         * @param {array} pipes
-         * @param {function|string} p
-         * @returns {boolean}
-         */
-        _hasPipe: function(pipes, p) {
-            if (!pipes) {
-                return false;
-            }
-            var i, l, name;
-            name = isFunction(p) ? p.name : p;
-            for (i = 0, l = pipes.length; i < l; i++) {
-                if (pipes[i][3].name === name) {
-                    return true;
-                }
-            }
-            return false;
-        },
-
-        /**
-         * Get current value (filtered and via executing the code)
-         * @returns {*}
-         */
-        getValue: function() {
-            return this._getValue();
-        },
-
-        /**
-         * Get last calculated value before filters were applied
-         * @returns {*}
-         */
-        getUnfilteredValue: function() {
-            return this.unfiltered || this.curr;
-        },
-
-        /**
-         * Get previous value
-         * @returns {*}
-         */
-        getPrevValue: function() {
-            return this.prev;
-        },
-
-        /**
-         * Get last calculated value (with filters and pipes)
-         * @returns {*}
-         */
-        getLastValue: function() {
-            return this.curr;
-        },
-
-        /**
-         * Get simple array change prescription
-         * @param {[]} from optional
-         * @param {[]} to optional
-         * @returns {[]}
-         */
-        getPrescription: function(from, to) {
-            to = to || this._getValue();
-            return levenshteinArray(from || [], to || []).prescription;
-        },
-
-        /**
-         * Get array change prescription with moves
-         * @param {[]} from
-         * @param {function} trackByFn
-         * @param {[]} to
-         * @returns {[]}
-         */
-        getMovePrescription: function(from, trackByFn, to) {
-
-            var self    = this;
-                to      = to || self._getValue();
-
-            return prescription2moves(
-                from || [],
-                to || [],
-                self.getPrescription(from || [], to || []),
-                trackByFn
-            );
-        },
-
-        /**
-         * Set value to observed property
-         * @param {*} val
-         */
-        setValue: function(val) {
-
-            var self    = this,
-                type    = self.type;
-
-            self.lastSetValue = val;
-
-            val = self._runThroughPipes(val, self.inputPipes);
-
-            if (type === "attr") {
-                self.obj[self.code] = val;
-            }
-            else if (type === "expr") {
-
-                if (!self.setterFn) {
-                    self.setterFn   = createSetter(self.code);
-                }
-
-                self.setterFn(self.obj, val);
-            }
-            else if (type === "object") {
-                self.obj = val;
-            }
-        },
-
-        onInputParamChange: function(val, prev, async) {
-            this.setValue(this.lastSetValue);
-            if (async) {
-                this.checkAll();
-            }
-        },
-
-        onPipeParamChange: function(val, prev, async) {
-            this.forcePipes = true;
-            this.check();
-            this.forcePipes = false;
-        },
-
-        /*onObserverChange: function(changes) {
-
-            var self = this,
-                code = self.code,
-                i, l,
-                change;
-
-            for (i = 0, l = changes.length; i < l; i++) {
-                change = changes[i];
-                if (change.name == code) {
-                    self.obsrvChanged = true;
-                    break;
-                }
-            }
-        },*/
-
-        _check: function(async) {
-
-            var self    = this,
-                val;
-
-            if (self.deterministic && self.pipes && !self.forcePipes) {
-                if (!self._checkUnfiltered()) {
-                    return false;
-                }
-                else {
-                    // code smell.
-                    // useUnfiltered param implies that
-                    // _checkUnfiltered has been called.
-                    val = self._getValue(true);
-                }
-            }
-            else {
-                val     = self._getValue();
-            }
-
-            var curr    = self.currCopy,
-                eq      = equals(curr, val);
-
-            //if (self.obsrvDelegate) {
-            //    eq      = !self.obsrvChanged;
-            //}
-            //else {
-            //    eq      = equals(curr, val);
-            //}
-
-            if (!eq) {
-                self.curr = val;
-                self.prev = curr;
-                self.currCopy = isPrimitive(val) ? val : copy(val);
-                //self.obsrvChanged = false;
-                observable.trigger(self.id, val, curr, async);
-                return true;
-            }
-
-            return false;
-        },
-
-        _checkUnfiltered: function() {
-
-            var self    = this,
-                val     = self._getRawValue(),
-                curr    = self.unfilteredCopy,
-                eq      = equals(curr, val);
-
-            if (!eq) {
-                self.unfiltered = val;
-                self.unfilteredCopy = isPrimitive(val) ? val : copy(val);
-                return true;
-            }
-
-            return false;
-        },
-
-        /**
-         * Check for changes
-         * @param {bool} async
-         * @returns {bool}
-         */
-        check: function(async) {
-            return this._check(async);
-        },
-
-        /**
-         * Check all observed properties for changes
-         * @returns {bool}
-         */
-        checkAll: function() {
-            return this.obj.$$watchers.$checkAll();
-        },
-
-        /**
-         * Get last calculated value (with filters and pipes)
-         * @returns {*}
-         */
-        getLastResult: function() {
-            return this.curr;
-        },
-
-        /**
-         * Set time interval to check for changes periodically
-         * @param {number} ms
-         */
-        setInterval: function(ms) {
-
-            var self    = this;
-            if (self.itv) {
-                self.clearInterval();
-            }
-            self.itv = setInterval(function(){self.check();}, ms);
-        },
-
-        /**
-         * Clear check interval
-         * @method
-         */
-        clearInterval: function() {
-            var self    = this;
-            if (self.itv) {
-                clearInterval(self.itv);
-                self.itv = null;
-            }
-        },
-
-        /**
-         * Unsubscribe and destroy if there are no other listeners
-         * @param {function} fn
-         * @param {object} fnScope
-         * @returns {boolean} true if destroyed
-         */
-        unsubscribeAndDestroy: function(fn, fnScope) {
-
-            var self    = this,
-                id      = self.id;
-
-            if (fn) {
-                observable.un(id, fn, fnScope);
-            }
-
-            if (!observable.hasListener(id)) {
-                self.destroy();
-                return true;
-            }
-
-            return false;
-        },
-
-        /**
-         * @method
-         */
-        destroy: function() {
-
-            var self    = this,
-                pipes   = self.pipes,
-                ipipes  = self.inputPipes,
-                i, il,
-                j, jl,
-                ws;
-
-            if (self.itv) {
-                self.clearInterval();
-            }
-
-            if (pipes) {
-                for (i = -1, il = pipes.length; ++i < il;) {
-                    ws = pipes[i][2];
-                    for (j = -1, jl = ws.length; ++j < jl;) {
-                        ws[j].unsubscribeAndDestroy(self.check, self);
-                    }
-                }
-            }
-            if (ipipes) {
-                for (i = -1, il = ipipes.length; ++i < il;) {
-                    ws = ipipes[i][2];
-                    for (j = -1, jl = ws.length; ++j < jl;) {
-                        ws[j].unsubscribeAndDestroy(self.onInputParamChange, self);
-                    }
-                }
-            }
-
-            //if (self.obsrvDelegate) {
-            //    Object.unobserve(self.obj, self.obsrvDelegate);
-            //}
-
-            if (self.obj) {
-                //delete self.obj.$$watchers.$codes[self.origCode];
-                self.obj.$$watchers.$codes[self.origCode] = null;
-            }
-
-            observable.destroyEvent(self.id);
-
-            for (i in self) {
-                if (self.hasOwnProperty(i)){
-                    self[i] = null;
-                }
-            }
-        }
-    }, true, false);
-
-
-    /**
-     * @method
-     * @static
-     * @param {object} obj
-     * @param {string} code
-     * @param {function} fn
-     * @param {object} fnScope
-     * @param {object} opt
-     * @returns {Watchable}
-     */
-    var create = function(obj, code, fn, fnScope, opt) {
-
-            opt = opt || {};
-            code = code || "";
-
-            code = normalizeExpr(obj, trim(code), opt.mock);
-
-            if (obj) {
-                if (!obj.$$watchers) {
-                    obj.$$watchers = {
-                        $codes: {},
-                        $checkAll: function() {
-
-                            var ws      = this.$codes,
-                                i,
-                                changes = 0;
-
-                            for (i in ws) {
-
-                                if (ws[i] && ws[i].check()) {
-                                    changes++;
-                                }
-                            }
-
-                            return changes;
-                        },
-                        $destroyAll: function() {
-
-                            var ws      = this.$codes,
-                                i;
-
-                            for (i in ws) {
-                                if (ws[i]) {
-                                    ws[i].destroy();
-                                    //delete ws[i];
-                                    ws[i] = null;
-                                }
-                            }
-                        }
-                    };
-                }
-
-                if (obj.$$watchers.$codes[code]) {
-                    obj.$$watchers.$codes[code].subscribe(fn, fnScope,
-                        {append: [opt.userData || null], allowDupes: true});
-                }
-                else {
-                    obj.$$watchers.$codes[code] = new Watchable(
-                        obj, code, fn, fnScope, opt);
-                }
-
-                return obj.$$watchers.$codes[code];
-            }
-            else {
-                return new Watchable(obj, code, fn, fnScope, opt);
-            }
-        },
-
-        /**
-         * @method
-         * @static
-         * @param {object} obj
-         * @param {string} code
-         * @param {function} fn
-         * @param {object} fnScope
-         */
-        unsubscribeAndDestroy = function(obj, code, fn, fnScope) {
-            code = trim(code);
-
-            var ws = obj.$$watchers ? obj.$$watchers.$codes : null;
-
-            if (ws && ws[code] && ws[code].unsubscribeAndDestroy(fn, fnScope)) {
-                //delete ws[code];
-                ws[code] = null;
-            }
-        },
-
-        /**
-         * Normalize expression
-         * @param {object} dataObj
-         * @param {string} expr
-         * @param {*} mockMode
-         * @returns {string}
-         */
-        normalizeExpr = function(dataObj, expr, mockMode) {
-
-            if (expr.substr(0, 2) === '{{') {
-                expr = expr.substring(2, expr.length - 2);
-            }
-
-            // in mock mode we can't check dataObj for having
-            // a property. dataObj does not exists in this
-            // context
-            if (mockMode) {
-                var match;
-                if ((match = expr.match(/(^|this)\.([A-Z0-9_$]+)$/i)) !== null) {
-                    return match[2];
-                }
-                else {
-                    return expr;
-                }
-            }
-
-            if (dataObj && expr) {
-                if (dataObj.hasOwnProperty(expr)) {
-                    return expr;
-                }
-                var prop;
-                if (expr.charAt(0) === '.') {
-                    prop = expr.substr(1);
-                    if (dataObj.hasOwnProperty(prop)) {
-                        return prop;
-                    }
-                }
-                else if (expr.substr(0, 5) === "this.") {
-                    prop = expr.substr(5);
-                    if (dataObj.hasOwnProperty(prop)) {
-                        return prop;
-                    }
-                }
-            }
-            return expr;
-        },
-
-        /**
-         * Evaluate code against object
-         * @param {string} expr
-         * @param {object} scope
-         * @param {object} opt
-         * @returns {*}
-         */
-        evaluate    = function(expr, scope, opt) {
-            var val;
-            if (val = isStatic(expr)) {
-                return val;
-            }
-            if (expr.indexOf('|') === -1) {
-                return createGetter(expr)(scope);
-            }
-            var w = create(scope, expr, null, null, opt),
-                v = w.getValue();
-            w.unsubscribeAndDestroy();
-            return v;
-        };
-
-
-
-    Watchable.create = create;
-    Watchable.unsubscribeAndDestroy = unsubscribeAndDestroy;
-    Watchable.normalizeExpr = normalizeExpr;
-    Watchable.eval = evaluate;
-
-    return Watchable;
-}();
-
-
-
-
-
-
-
-var createWatchable = Watchable.create;
-
-function isNull(value) {
-    return value === null;
-};
 
 
 
@@ -4243,9 +832,8 @@ var Class = function(){
                                 throw plCls + " not found";
                             }
                         }
-
+ 
                         plugin = new plugin(self, args);
-
                         pmap[plugin.$class] = plugin;
 
                         if (plugin.$beforeHostInit) {
@@ -4380,10 +968,9 @@ var Class = function(){
             $bind: function(fn) {
                 var self = this;
                 return function() {
-                    if (self.$isDestroyed()) {
-                        return;
+                    if (!self.$isDestroyed()) {
+                        return fn.apply(self, arguments);
                     }
-                    return fn.apply(self, arguments);
                 };
             },
 
@@ -4585,11 +1172,11 @@ var Class = function(){
             definition.$extends = parentClass;
             definition.$mixins  = null;
 
-
-            noop                = function(){};
-            noop[proto]         = pConstructor[proto];
-            prototype           = new noop;
-            noop                = null;
+            //noop                = function(){};
+            //noop[proto]         = pConstructor[proto];
+            //prototype           = new noop;
+            //noop                = null;
+            prototype           = Object.create(pConstructor[proto]);
             definition[constr]  = definition[constr] || $constr;
 
             preparePrototype(prototype, definition, pConstructor);
@@ -4606,6 +1193,7 @@ var Class = function(){
 
             c = createConstructor(name);
             prototype.constructor = c;
+            prototype.$self = c;
             c[proto] = prototype;
 
             for (k in BaseClass) {
@@ -4780,6 +1368,10 @@ var Class = function(){
 
 
 
+var ns = new Namespace(MetaphorJs, "MetaphorJs");
+
+
+
 var cs = new Class(ns);
 
 
@@ -4790,678 +1382,4731 @@ var defineClass = cs.define;
 
 
 
+function isRegExp(value) {
+    return varType(value) === 9;
+};
 
 
-var TextRenderer = function(){
 
-    var startSymbol             = '{{',
-        endSymbol               = '}}',
-        startSymbolLength       = 2,
-        endSymbolLength         = 2,
+function isDate(value) {
+    return varType(value) === 10;
+};
 
-        savedBoundary           = '--##--',
 
-        rReplaceEscape          = /\\{/g,
 
-        observer                = new Observable,
+var copy = function() {
 
-        //parent, userData, recursive
-        factory                 = function(scope, origin, opt) {
+    var win = typeof window != strUndef ? window : null,
+        glob = typeof global != strUndef ? global : null;
 
-            if (!origin || !origin.indexOf ||
-                (origin.indexOf(startSymbol) === -1 &&
-                 origin.indexOf(savedBoundary) === -1)) {
+    var copy = function copy(source, dest){
 
-                if (opt.force) {
-                    return new TextRenderer(
-                        scope,
-                        startSymbol + origin + endSymbol,
-                        opt
-                    );
-                }
-
-                return null;
-            }
-
-            return new TextRenderer(scope, origin, opt);
-        };
-
-    var TextRenderer = defineClass({
-
-        $class: "TextRenderer",
-
-        id: null,
-        parent: null,
-        isRoot: null,
-        scope: null,
-        origin: "",
-        processed: null,
-        text: null,
-        watchers: null,
-        children: null,
-        data: null,
-        recursive: false,
-        dataChangeDelegate: null,
-        changeTmt: null,
-        lang: null,
-        boundary: null,
-        mock: null,
-
-        //parent, userData, recursive, boundary, mock
-        $init: function(scope, origin, opt) {
-
-            opt = opt || {};
-
-            var self        = this;
-
-            self.id         = nextUid();
-            self.origin     = origin;
-            self.scope      = scope;
-            self.parent     = opt.parent;
-            self.isRoot     = !opt.parent;
-            self.data       = opt.userData;
-            self.lang       = scope.$app ? scope.$app.lang : null;
-            self.boundary   = opt.boundary || "---";
-            self.mock       = opt.mock;
-
-            if (opt.recursive === true || opt.recursive === false) {
-                self.recursive = opt.recursive;
-            }
-
-            self.watchers   = [];
-            self.children   = [];
-
-            self.dataChangeDelegate = bind(self.doDataChange, self);
-            self.processed  = self.processText(origin, self.mock);
-            self.render();
-        },
-
-        subscribe: function(fn, context) {
-            return observer.on(this.id, fn, context);
-        },
-
-        unsubscribe: function(fn, context) {
-            return observer.un(this.id, fn, context);
-        },
-
-        getString: function() {
-            var self = this;
-
-            if (isNull(self.text)) {
-                self.render();
-            }
-
-            var text = self.text || "";
-
-            if (text.indexOf('\\{') !== -1) {
-                return text.replace(rReplaceEscape, '{');
-            }
-
-            return text;
-        },
-
-
-        render: function() {
-
-            var self    = this,
-                text    = self.processed,
-                b       = self.boundary,
-                i, l,
-                str,
-                ch;
-
-            if (!self.children.length) {
-                self.createChildren();
-            }
-
-            ch = self.children;
-
-            for (i = -1, l = ch.length; ++i < l;) {
-                str = ch[i] instanceof TextRenderer ? ch[i].getString() : ch[i];
-                text = text.replace(
-                    b + i + b,
-                    str === null ? "" : str
-                );
-            }
-
-            self.text = text;
-
-            return text;
-        },
-
-
-
-        processText: function(text, mock) {
-
-            /*
-             arguably, str += "" is faster than separators.push() + separators.join()
-             well, at least in my Firefox it is so.
-             */
-
-            var self        = this,
-                index       = 0,
-                textLength  = text.length,
-                startIndex,
-                endIndex,
-                result      = "";
-
-            while(index < textLength) {
-                if (((startIndex = text.indexOf(startSymbol, index)) !== -1) &&
-                    ((endIndex = text.indexOf(endSymbol, startIndex + startSymbolLength)) !== -1) &&
-                    text.substr(startIndex - 1, 1) !== '\\') {
-
-                    result += text.substring(index, startIndex);
-
-                    if (endIndex !== startIndex + startSymbolLength) {
-                        result += self.watcherMatch(
-                            text.substring(startIndex + startSymbolLength, endIndex),
-                            mock
-                        );
-                    }
-
-                    index = endIndex + endSymbolLength;
-
-                } else {
-                    // we did not find an interpolation
-                    if (index !== textLength) {
-                        result += text.substring(index);
-                    }
-                    break;
-                }
-            }
-
-
-            //saved keys
-            /*index       = 0;
-            text        = result;
-            textLength  = text.length;
-            result      = "";
-            var bndLen      = savedBoundary.length,
-                getterid;
-
-            while(index < textLength) {
-                if (((startIndex = text.indexOf(savedBoundary, index)) !== -1) &&
-                    (endIndex = text.indexOf(savedBoundary, startIndex + bndLen)) !== -1) {
-
-                    result += text.substring(index, startIndex);
-
-                    getterid    = text.substring(startIndex, endIndex + bndLen);
-                    getterid    = getterid.replace(savedBoundary, "");
-                    getterid    = parseInt(getterid);
-
-                    result += self.watcherMatch(
-                        getterid,
-                        mock
-                    );
-
-                    index = endIndex + bndLen;
-                } else {
-                    // we did not find an interpolation
-                    if (index !== textLength) {
-                        result += text.substring(index);
-                    }
-                    break;
-                }
-            }*/
-
-            return result;
-        },
-
-        watcherMatch: function(expr, mock) {
-
-            var self        = this,
-                ws          = self.watchers,
-                b           = self.boundary,
-                w,
-                isLang      = false,
-                recursive   = self.recursive,
-                getter      = null;
-
-            expr        = trim(expr);
-
-            if (expr.substr(0,1) === '-') {
-                var inx = expr.indexOf(" "),
-                    mods = expr.substr(1,inx);
-                expr = expr.substr(inx);
-
-                if (!recursive && mods.indexOf("r") !== -1) {
-                    recursive = true;
-                }
-                if (mods.indexOf("l") !== -1) {
-                    isLang = true;
-                }
-            }
-
-            /*if (typeof expr === "number") {
-                var getterId = expr;
-                if (typeof __MetaphorJsPrebuilt !== "undefined") {
-                    expr = __MetaphorJsPrebuilt['__tpl_getter_codes'][getterId];
-                    getter = __MetaphorJsPrebuilt['__tpl_getters'][getterId];
-                }
-                else {
-                    return "";
-                }
-            }*/
-
-            w = createWatchable(
-                self.scope,
-                expr,
-                self.onDataChange,
-                self,
-                {
-                    filterLookup: filterLookup, mock: mock, getterFn: getter,
-                    userData: {
-                        recursive: recursive
-                    }
-                }
-            );
-
-            if (isLang && !w.hasPipe("l")) {
-                w.addPipe("l");
-            }
-
-            ws.push(w);
-
-            return b + (ws.length-1) + b;
-        },
-
-        onDataChange: function() {
-
-            var self    = this;
-
-            if (!self.changeTmt) {
-                self.changeTmt = setTimeout(self.dataChangeDelegate, 0);
-            }
-        },
-
-        doDataChange: function() {
-            var self = this;
-            self.destroyChildren();
-            self.triggerChange();
-            self.changeTmt = null;
-        },
-
-        triggerChange: function() {
-
-            var self    = this;
-            self.text   = null;
-
-            if (self.isRoot) {
-                observer.trigger(self.id, self, self.data);
-            }
-            else {
-                self.parent.triggerChange();
-            }
-        },
-
-
-        createChildren: function() {
-
-            var self    = this,
-                ws      = self.watchers,
-                ch      = self.children,
-                scope   = self.scope,
-                rec     = false,
-                i, l,
-                val;
-
-            for (i = -1, l = ws.length; ++i < l; ){
-                val     = ws[i].getLastResult();
-
-                //TODO: watcher must have userData!
-                // if it doesn't, it was taken from cache and it is wrong
-                // because -rl flags may be different
-                rec     = self.recursive || (ws[i].userData && ws[i].userData.recursive);
-                if (val === undf) {
-                    val = "";
-                }
-                ch.push((rec && factory(scope, val, {parent: self, recursive: true})) || val);
-            }
-        },
-
-        destroyChildren: function() {
-
-            var self    = this,
-                ch      = self.children,
-                i, l;
-
-            for (i = -1, l = ch.length; ++i < l; ){
-                if (ch[i] instanceof TextRenderer) {
-                    ch[i].$destroy();
-                }
-            }
-
-            self.children = [];
-        },
-
-        destroyWatchers: function() {
-
-            var self    = this,
-                ws      = self.watchers,
-                i, l;
-
-            for (i = -1, l = ws.length; ++i < l;
-                 ws[i].unsubscribeAndDestroy(self.onDataChange, self)){}
-
-            self.watchers = [];
-        },
-
-        destroy: function() {
-
-            var self = this;
-
-            self.destroyChildren();
-            self.destroyWatchers();
-
-            observer.destroyEvent(self.id);
-
-            if (self.changeTmt) {
-                clearTimeout(self.changeTmt);
-            }
+        if (win && source === win) {
+            throw new Error("Cannot copy window object");
+        }
+        if (glob && source === glob) {
+            throw new Error("Cannot copy global object");
         }
 
-    }, {
-        create: factory
-    });
+        if (!dest) {
+            dest = source;
+            if (source) {
+                if (isArray(source)) {
+                    dest = copy(source, []);
+                } else if (isDate(source)) {
+                    dest = new Date(source.getTime());
+                } else if (isRegExp(source)) {
+                    dest = new RegExp(source.source);
+                } else if (isPlainObject(source)) {
+                    dest = copy(source, {});
+                }
+            }
+        } else {
+            if (source === dest) {
+                throw new Error("Objects are identical");
+            }
+            if (isArray(source)) {
+                dest.length = 0;
+                for ( var i = 0, l = source.length; i < l; i++) {
+                    dest.push(copy(source[i]));
+                }
+            } else {
+                var key;
+                for (key in dest) {
+                    delete dest[key];
+                }
+                for (key in source) {
+                    if (source.hasOwnProperty(key)) {
+                        if (key.charAt(0) == '$' || isFunction(source[key])) {
+                            dest[key] = source[key];
+                        }
+                        else {
+                            dest[key] = copy(source[key]);
+                        }
+                    }
+                }
+            }
+        }
+        return dest;
+    };
 
-    return TextRenderer;
+    return copy;
 }();
 
+/**
+ * @param {Function} fn
+ * @param {*} context
+ */
+var bind = Function.prototype.bind ?
+              function(fn, context){
+                  return fn.bind(context);
+              } :
+              function(fn, context) {
+                  return function() {
+                      return fn.apply(context, arguments);
+                  };
+              };
 
 
 
 
+var nextUid = function(){
+    var uid = ['0', '0', '0'];
+
+    // from AngularJs
+    /**
+     * @returns {String}
+     */
+    return function nextUid() {
+        var index = uid.length;
+        var digit;
+
+        while(index) {
+            index--;
+            digit = uid[index].charCodeAt(0);
+            if (digit == 57 /*'9'*/) {
+                uid[index] = 'A';
+                return uid.join('');
+            }
+            if (digit == 90  /*'Z'*/) {
+                uid[index] = '0';
+            } else {
+                uid[index] = String.fromCharCode(digit + 1);
+                return uid.join('');
+            }
+        }
+        uid.unshift('0');
+        return uid.join('');
+    };
+}();
+
+/**
+ * @param {Function} fn
+ * @param {Object} context
+ * @param {[]} args
+ * @param {number} timeout
+ */
+function async(fn, context, args, timeout) {
+    return setTimeout(function(){
+        fn.apply(context, args || []);
+    }, timeout || 0);
+};
 
 
-var createFunc = functionFactory.createFunc;
 
 
+/**
+ * This class is private - you can't create an event other than via Observable.
+ * See {@link class:Observable} reference.
+ * @class ObservableEvent
+ * @private
+ */
+var ObservableEvent = function(name, options) {
 
-var Scope = function(cfg) {
     var self    = this;
 
-    self.$$observable    = new Observable;
-    self.$$historyWatchers  = {};
-    extend(self, cfg, true, false);
+    self.name           = name;
+    self.listeners      = [];
+    self.map            = {};
+    self.hash           = nextUid();
+    self.uni            = '$$' + name + '_' + self.hash;
+    self.suspended      = false;
+    self.lid            = 0;
 
-    if (self.$parent) {
-        self.$parent.$on("check", self.$$onParentCheck, self);
-        self.$parent.$on("destroy", self.$$onParentDestroy, self);
-        self.$parent.$on("freeze", self.$freeze, self);
-        self.$parent.$on("unfreeze", self.$unfreeze, self);
+    if (typeof options === "object" && options !== null) {
+        extend(self, options, true, false);
     }
     else {
-        self.$root  = self;
-        self.$isRoot= true;
+        self.returnResult = options;
     }
 };
 
-extend(Scope.prototype, {
 
-    $app: null,
-    $parent: null,
-    $root: null,
-    $isRoot: false,
-    $level: 0,
-    $static: false,
-    $$frozen: false,
-    $$observable: null,
-    $$watchers: null,
-    $$historyWatchers: null,
-    $$checking: false,
-    $$destroyed: false,
-    $$changing: false,
+extend(ObservableEvent.prototype, {
 
-    $$tmt: null,
+    name: null,
+    listeners: null,
+    map: null,
+    hash: null,
+    uni: null,
+    suspended: false,
+    lid: null,
+    returnResult: null,
+    autoTrigger: null,
+    lastTrigger: null,
+    triggerFilter: null,
+    filterContext: null,
+    expectPromises: false,
+    resolvePromises: false,
 
-    $new: function(data) {
-        var self = this;
-        return new Scope(extend({}, data, {
-            $parent: self,
-            $root: self.$root,
-            $app: self.$app,
-            $level: self.$level + 1,
-            $static: self.$static
-        }, true, false));
+    /**
+     * Get event name
+     * @method
+     * @returns {string}
+     */
+    getName: function() {
+        return this.name;
     },
 
-    $newIsolated: function() {
-        return new Scope({
-            $app: this.$app,
-            $level: self.$level + 1,
-            $static: this.$static
-        });
-    },
+    /**
+     * @method
+     */
+    destroy: function() {
+        var self        = this,
+            k;
 
-    $freeze: function() {
-        var self = this;
-        if (!self.$$frozen) {
-            self.$$frozen = true;
-            self.$$observable.trigger("freeze", self);
+        for (k in self) {
+            self[k] = null;
         }
     },
 
-    $unfreeze: function() {
-        var self = this;
-        if (self.$$frozen) {
-            self.$$frozen = false;
-            self.$$observable.trigger("unfreeze", self);
+    /**
+     * @method
+     * @param {function} fn Callback function { @required }
+     * @param {object} context Function's "this" object
+     * @param {object} options See {@link class:Observable.on}
+     */
+    on: function(fn, context, options) {
+
+        if (!fn) {
+            return null;
         }
-    },
 
-    $on: function(event, fn, fnScope) {
-        return this.$$observable.on(event, fn, fnScope);
-    },
+        context     = context || null;
+        options     = options || {};
 
-    $un: function(event, fn, fnScope) {
-        return this.$$observable.un(event, fn, fnScope);
-    },
+        var self        = this,
+            uni         = self.uni,
+            uniContext  = fn || context;
 
-    $watch: function(expr, fn, fnScope) {
-        return Watchable.create(this, expr, fn, fnScope);
-    },
+        if (uniContext[uni] && !options.allowDupes) {
+            return null;
+        }
 
-    $unwatch: function(expr, fn, fnScope) {
-        return Watchable.unsubscribeAndDestroy(this, expr, fn, fnScope);
-    },
+        var id      = ++self.lid,
+            first   = options.first || false;
 
-    $createGetter: function(expr) {
-        var self    = this,
-            getter  = createGetter(expr);
-        return function() {
-            return getter(self);
+        uniContext[uni]  = id;
+
+        var e = {
+            fn:         fn,
+            context:    context,
+            uniContext: uniContext,
+            id:         id,
+            async:      false,
+            called:     0, // how many times the function was triggered
+            limit:      0, // how many times the function is allowed to trigger
+            start:      1, // from which attempt it is allowed to trigger the function
+            count:      0, // how many attempts to trigger the function was made
+            append:     null, // append parameters
+            prepend:    null // prepend parameters
         };
+
+        extend(e, options, true, false);
+
+        if (e.async === true) {
+            e.async = 1;
+        }
+
+        if (first) {
+            self.listeners.unshift(e);
+        }
+        else {
+            self.listeners.push(e);
+        }
+
+        self.map[id] = e;
+
+        if (self.autoTrigger && self.lastTrigger && !self.suspended) {
+            var prevFilter = self.triggerFilter;
+            self.triggerFilter = function(l){
+                if (l.id === id) {
+                    return prevFilter ? prevFilter(l) !== false : true;
+                }
+                return false;
+            };
+            self.trigger.apply(self, self.lastTrigger);
+            self.triggerFilter = prevFilter;
+        }
+
+        return id;
     },
 
-    $createSetter: function(expr) {
+    /**
+     * @method
+     * @param {function} fn Callback function { @required }
+     * @param {object} context Function's "this" object
+     * @param {object} options See {@link class:Observable.on}
+     */
+    once: function(fn, context, options) {
+
+        options = options || {};
+        options.limit = 1;
+
+        return this.on(fn, context, options);
+    },
+
+    /**
+     * @method
+     * @param {function} fn Callback function { @required }
+     * @param {object} context Callback context
+     */
+    un: function(fn, context) {
+
+        var self        = this,
+            inx         = -1,
+            uni         = self.uni,
+            listeners   = self.listeners,
+            id;
+
+        if (fn == parseInt(fn)) {
+            id      = parseInt(fn);
+        }
+        else {
+            context = context || fn;
+            id      = context[uni];
+        }
+
+        if (!id) {
+            return false;
+        }
+
+        for (var i = 0, len = listeners.length; i < len; i++) {
+            if (listeners[i].id === id) {
+                inx = i;
+                delete listeners[i].uniContext[uni];
+                break;
+            }
+        }
+
+        if (inx === -1) {
+            return false;
+        }
+
+        listeners.splice(inx, 1);
+        delete self.map[id];
+        return true;
+    },
+
+    /**
+     * @method hasListener
+     * @return bool
+     */
+
+    /**
+     * @method
+     * @param {function} fn Callback function { @required }
+     * @param {object} context Callback context
+     * @return boolean
+     */
+    hasListener: function(fn, context) {
+
         var self    = this,
-            setter  = createSetter(expr);
-        return function(value) {
-            return setter(value, self);
-        };
+            listeners   = self.listeners,
+            id;
+
+        if (fn) {
+
+            context = context || fn;
+
+            if (!isFunction(fn)) {
+                id  = parseInt(fn);
+            }
+            else {
+                id  = context[self.uni];
+            }
+
+            if (!id) {
+                return false;
+            }
+
+            for (var i = 0, len = listeners.length; i < len; i++) {
+                if (listeners[i].id === id) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        else {
+            return listeners.length > 0;
+        }
     },
 
-    $createFunc: function(expr) {
+
+    /**
+     * @method
+     */
+    removeAllListeners: function() {
         var self    = this,
-            fn      = createFunc(expr);
-        return function() {
-            return fn(self);
-        };
+            listeners = self.listeners,
+            uni     = self.uni,
+            i, len;
+
+        for (i = 0, len = listeners.length; i < len; i++) {
+            delete listeners[i].uniContext[uni];
+        }
+        self.listeners   = [];
+        self.map         = {};
     },
 
-    $watchHistory: function(prop, param) {
+    /**
+     * @method
+     */
+    suspend: function() {
+        this.suspended = true;
+    },
+
+    /**
+     * @method
+     */
+    resume: function() {
+        this.suspended = false;
+    },
+
+
+    _prepareArgs: function(l, triggerArgs) {
+        var args;
+
+        if (l.append || l.prepend) {
+            args    = slice.call(triggerArgs);
+            if (l.prepend) {
+                args    = l.prepend.concat(args);
+            }
+            if (l.append) {
+                args    = args.concat(l.append);
+            }
+        }
+        else {
+            args = triggerArgs;
+        }
+
+        return args;
+    },
+
+    _processResult: function(results) {
         var self = this;
-        if (!self.$$historyWatchers[param]) {
-            self.$$historyWatchers[param] = prop;
-            MetaphorJs.history.on("change-" + param, self.$$onHistoryChange, self);
+        if (rr === "all") {
+            ret.push(res);
         }
-    },
-
-    $unwatchHistory: function(param) {
-        var self = this;
-        if (!self.$$historyWatchers[param]) {
-            delete self.$$historyWatchers[param];
-            MetaphorJs.history.un("change-" + param, self.$$onHistoryChange, self);
+        else if (rr === "concat" && res) {
+            ret = ret.concat(res);
         }
-    },
-
-    $wrap: function(fn, context) {
-        var self = this,
-            name;
-
-        if (typeof fn === "string") {
-            name = fn;
-            fn = context[name];
+        else if (rr === "merge") {
+            extend(ret, res, true, false);
         }
-
-        var wrapper = function() {
-            var res = fn.apply(context, arguments);
-            self.$check();
+        else if (rr === "nonempty" && res) {
             return res;
-        };
-
-        if (name) {
-            context[name] = wrapper;
         }
-
-        return wrapper;
     },
 
-    $get: function(key) {
+    /**
+     * @method
+     * @return {*}
+     */
+    trigger: function() {
 
-        var s = this;
+        var self            = this,
+            listeners       = self.listeners,
+            rr              = self.returnResult,
+            filter          = self.triggerFilter,
+            filterContext   = self.filterContext,
+            expectPromises  = self.expectPromises,
+            results         = [],
+            prevPromise,
+            resPromise,
+            args;
 
-        while (s) {
-            if (s[key] !== undf) {
-                return s[key];
-            }
-            s = s.$parent;
+        if (self.suspended) {
+            return null;
         }
 
-        return undf;
-    },
+        if (self.autoTrigger) {
+            self.lastTrigger = slice.call(arguments);
+        }
 
-    $set: function(key, value) {
-        var self = this;
-        if (typeof key === "string") {
-            this[key] = value;
+        if (listeners.length === 0) {
+            return null;
+        }
+
+        var ret     = rr === "all" || rr === "concat" ?
+                        [] : 
+                        (rr === "merge" ? {} : null),
+            q, l,
+            res;
+
+        if (rr === "first") {
+            q = [listeners[0]];
         }
         else {
-            for (var k in key) {
-                self[k] = key[k];
+            // create a snapshot of listeners list
+            q = slice.call(listeners);
+        }
+
+        // now if during triggering someone unsubscribes
+        // we won't skip any listener due to shifted
+        // index
+        while (l = q.shift()) {
+
+            // listener may already have unsubscribed
+            if (!l || !self.map[l.id]) {
+                continue;
             }
-        }
-        this.$check();
-    },
 
-    $$onParentDestroy: function() {
-        this.$destroy();
-    },
+            args = self._prepareArgs(l, arguments);
 
-    $$onParentCheck: function() {
-        this.$check();
-    },
-
-    $$onHistoryChange: function(val, prev, name) {
-        var self = this,
-            prop;
-        if (self.$$historyWatchers[name]) {
-            prop = self.$$historyWatchers[name];
-            self[prop] = val;
-            self.$check();
-        }
-    },
-
-    $scheduleCheck: function(timeout) {
-        var self = this;
-        if (!self.$$tmt) {
-            self.$tmt = async(self.$check, self, null, timeout);
-        }
-    },
-
-    $check: function() {
-        var self = this,
-            changes;
-
-        if (self.$$checking || self.$static || self.$$frozen) {
-            return;
-        }
-        self.$$checking = true;
-
-        if (self.$$tmt) {
-            clearTimeout(self.$$tmt);
-            self.$$tmt = null;
-        }
-
-        if (self.$$watchers) {
-            changes = self.$$watchers.$checkAll();
-        }
-
-        self.$$checking = false;
-
-        if (!self.$$destroyed) {
-            self.$$observable.trigger("check", changes);
-        }
-
-        if (changes > 0) {
-            self.$$changing = true;
-            self.$check();
-        }
-        else {
-            // finished changing after all iterations
-            if (self.$$changing) {
-                self.$$changing = false;
-                self.$$observable.trigger("changed");
+            if (filter && filter.call(filterContext, l, args, self) === false) {
+                continue;
             }
-        }
-    },
 
-    $reset: function(resetVars) {
-        var self = this;
-        self.$$observable.trigger("reset");
-    },
+            if (l.filter && l.filter.apply(l.filterContext || l.context, args) === false) {
+                continue;
+            }
 
-    $destroy: function() {
+            l.count++;
 
-        var self    = this,
-            param, i;
+            if (l.count < l.start) {
+                continue;
+            }
 
-        if (self.$$destroyed) {
-            return;
-        }
+            if (l.async && !expectPromises) {
+                res = null;
+                async(l.fn, l.context, args, l.async);
+            }
+            else {
+                if (expectPromises && prevPromise) {
+                    res = prevPromise.then(function(value) {
+                        if (rr === "pipe") {
+                            arguments[0] = value;
+                            args = self._prepareArgs(l, arguments);
+                        }
+                        return l.fn.apply(l.context, args);
+                    });
+                }
+                else {
+                    res = l.fn.apply(l.context, args);
+                }
+            }
 
-        self.$$destroyed = true;
-        self.$$observable.trigger("destroy");
-        self.$$observable.destroy();
+            l.called++;
 
-        if (self.$parent && self.$parent.$un) {
-            self.$parent.$un("check", self.$$onParentCheck, self);
-            self.$parent.$un("destroy", self.$$onParentDestroy, self);
-            self.$parent.$un("freeze", self.$freeze, self);
-            self.$parent.$un("unfreeze", self.$unfreeze, self);
-        }
+            if (l.called === l.limit) {
+                self.un(l.id);
+            }
 
-        if (self.$$watchers) {
-            self.$$watchers.$destroyAll();
-        }
+            // This rule is valid in all cases sync and async.
+            // It either returns first value or first promise.
+            if (rr === "first") {
+                return res;
+            }
+        
+            // Promise branch
+            if (expectPromises) {
+            
+                // we collect all results for further processing/resolving
+                results.push(res);
 
-        for (param in self.$$historyWatchers) {
-            self.$unwatchHistory(param);
-        }
-
-        for (i in self) {
-            if (self.hasOwnProperty(i)) {
-                self[i] = null;
+                if (rr === "pipe" && res) {
+                    prevPromise = res;
+                }
+            }
+            else {
+                if (rr !== null) {
+                    if (rr === "all") {
+                        ret.push(res);
+                    }
+                    else if (rr === "concat" && res) {
+                        ret = ret.concat(res);
+                    }
+                    else if (rr === "merge") {
+                        extend(ret, res, true, false);
+                    }
+                    else if (rr === "nonempty" && res) {
+                        return res;
+                    }
+                    else if (rr === "pipe") {
+                        ret = res;
+                        arguments[0] = res;
+                    }
+                    else if (rr === "last") {
+                        ret = res;
+                    }
+                    else if (rr === false && res === false) {
+                        return false;
+                    }
+                    else if (rr === true && res === true) {
+                        return true;
+                    }
+                }
             }
         }
 
-        self.$$destroyed = true;
+        if (expectPromises) {
+            resPromise = Promise.all(results);
+            if (self.resolvePromises && rr !== null && rr !== "all") {
+                resPromise = resPromise.then(function(values){
+                    var i, l = values.length, res;
+                    for(i = 0; i < l; i++) {
+                        res = values[i];
+                        if (rr === "concat" && res) {
+                            ret = ret.concat(res);
+                        }
+                        else if (rr === "merge") {
+                            extend(ret, res, true, false);
+                        }
+                        else if (rr === "nonempty" && res) {
+                            return res;
+                        }
+                        else if (rr === false && res === false) {
+                            return false;
+                        }
+                        else if (rr === true && res === true) {
+                            return true;
+                        }
+                    }
+                    return ret;
+                });
+            }
+            return resPromise;
+        }
+        else return ret;
     }
-
 }, true, false);
 
 
 
+
+
+
+
+
+/**
+ * @description A javascript event system implementing two patterns - observable and collector.
+ * @description Observable:
+ * @code examples/observable.js
+ *
+ * @description Collector:
+ * @code examples/collector.js
+ *
+ * @class Observable
+ * @version 1.2
+ * @author Ivan Kuindzhi
+ * @link https://github.com/kuindji/metaphorjs-observable
+ */
+var Observable = function() {
+
+    this.events = {};
+
+};
+
+
+extend(Observable.prototype, {
+
+
+
+    /**
+    * You don't have to call this function unless you want to pass params other than event name.
+    * Normally, events are created automatically.
+    *
+    * @method createEvent
+    * @access public
+    * @param {string} name {
+    *       Event name
+    *       @required
+    * }
+    * @param {bool|string} returnResult {
+    *   false -- return first 'false' result and stop calling listeners after that<br>
+    *   true -- return first 'true' result and stop calling listeners after that<br>
+    *   "all" -- return all results as array<br>
+    *   "concat" -- merge all results into one array (each result must be array)<br>
+    *   "merge" -- merge all results into one object (each result much be object)<br>
+    *   "pipe" -- pass return value of previous listener to the next listener.
+    *             Only first trigger parameter is being replaced with return value,
+    *             others stay as is.<br>
+    *   "first" -- return result of the first handler (next listener will not be called)<br>
+    *   "nonempty" -- return first nonempty result<br>
+    *   "last" -- return result of the last handler (all listeners will be called)<br>
+    * }
+    * @param {bool} autoTrigger {
+    *   once triggered, all future subscribers will be automatically called
+    *   with last trigger params
+    *   @code examples/autoTrigger.js
+    * }
+    * @param {function} triggerFilter {
+    *   This function will be called each time event is triggered. Return false to skip listener.
+    *   @code examples/triggerFilter.js
+    *   @param {object} listener This object contains all information about the listener, including
+    *       all data you provided in options while subscribing to the event.
+    *   @param {[]} arguments
+    *   @return {bool}
+    * }
+    * @param {object} filterContext triggerFilter's context
+    * @return {ObservableEvent}
+    */
+
+    /**
+     * @method createEvent
+     * @param {string} name
+     * @param {object} options {
+     *  Options object or returnResult value. All options are optional.
+     *  @type {string|bool} returnResult
+     *  @type {bool} autoTrigger
+     *  @type {function} triggerFilter
+     *  @type {object} filterContext
+     *  @type {bool} expectPromises
+     *  @type {bool} resolvePromises
+     * }
+     * @returns {ObservableEvent}
+     */
+    createEvent: function(name, options) {
+        name = name.toLowerCase();
+        var events  = this.events;
+        if (!events[name]) {
+            events[name] = new ObservableEvent(name, options);
+        }
+        return events[name];
+    },
+
+    /**
+    * @method
+    * @access public
+    * @param {string} name Event name
+    * @return {ObservableEvent|undefined}
+    */
+    getEvent: function(name) {
+        name = name.toLowerCase();
+        return this.events[name];
+    },
+
+    /**
+    * Subscribe to an event or register collector function.
+    * @method
+    * @access public
+    * @param {string} name {
+    *       Event name. Use '*' to subscribe to all events.
+    *       @required
+    * }
+    * @param {function} fn {
+    *       Callback function
+    *       @required
+    * }
+    * @param {object} context "this" object for the callback function
+    * @param {object} options {
+    *       You can pass any key-value pairs in this object. All of them will be passed 
+    *       to triggerFilter (if you're using one).
+    *       @type {bool} first {
+    *           True to prepend to the list of handlers
+    *           @default false
+    *       }
+    *       @type {number} limit {
+    *           Call handler this number of times; 0 for unlimited
+    *           @default 0
+    *       }
+    *       @type {number} start {
+    *           Start calling handler after this number of calls. Starts from 1
+    *           @default 1
+    *       }
+        *      @type {[]} append Append parameters
+        *      @type {[]} prepend Prepend parameters
+        *      @type {bool} allowDupes allow the same handler twice
+        *      @type {bool|int} async run event asynchronously. If event was
+        *                      created with <code>expectPromises: true</code>, 
+        *                      this option is ignored.
+    * }
+    */
+    on: function(name, fn, context, options) {
+        name = name.toLowerCase();
+        var events  = this.events;
+        if (!events[name]) {
+            events[name] = new ObservableEvent(name);
+        }
+        return events[name].on(fn, context, options);
+    },
+
+    /**
+    * Same as {@link class:Observable.on}, but options.limit is forcefully set to 1.
+    * @method
+    * @access public
+    */
+    once: function(name, fn, context, options) {
+        options     = options || {};
+        options.limit = 1;
+        return this.on(name, fn, context, options);
+    },
+
+    /**
+    * Unsubscribe from an event
+    * @method
+    * @access public
+    * @param {string} name Event name
+    * @param {function} fn Event handler
+    * @param {object} context If you called on() with context you must 
+    *                         call un() with the same context
+    */
+    un: function(name, fn, context) {
+        name = name.toLowerCase();
+        var events  = this.events;
+        if (!events[name]) {
+            return;
+        }
+        events[name].un(fn, context);
+    },
+
+    /**
+     * Relay all events of <code>eventSource</code> through this observable.
+     * @method
+     * @access public
+     * @param {object} eventSource
+     * @param {string} eventName
+     */
+    relayEvent: function(eventSource, eventName) {
+        eventSource.on(eventName, this.trigger, this, {
+            prepend: eventName === "*" ? null : [eventName]
+        });
+    },
+
+    /**
+     * Stop relaying events of <code>eventSource</code>
+     * @method
+     * @access public
+     * @param {object} eventSource
+     * @param {string} eventName
+     */
+    unrelayEvent: function(eventSource, eventName) {
+        eventSource.un(eventName, this.trigger, this);
+    },
+
+    /**
+     * @method hasListener
+     * @access public
+     * @return bool
+     */
+
+    /**
+    * @method hasListener
+    * @access public
+    * @param {string} name Event name { @required }
+    * @return bool
+    */
+
+    /**
+    * @method
+    * @access public
+    * @param {string} name Event name { @required }
+    * @param {function} fn Callback function { @required }
+    * @param {object} context Function's "this" object
+    * @return bool
+    */
+    hasListener: function(name, fn, context) {
+        var events = this.events;
+
+        if (name) {
+            name = name.toLowerCase();
+            if (!events[name]) {
+                return false;
+            }
+            return fn ? events[name].hasListener(fn, context) : true;
+        }
+        else {
+            for (name in events) {
+                if (events[name].hasListener()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    },
+
+    /**
+    * @method
+    * @access public
+    * @param {string} name Event name { @required }
+    * @return bool
+    */
+    hasEvent: function(name) {
+        return !!this.events[name];
+    },
+
+
+    /**
+    * Remove all listeners from all events
+    * @method removeAllListeners
+    * @access public
+    */
+
+    /**
+    * Remove all listeners from specific event
+    * @method
+    * @access public
+    * @param {string} name Event name { @required }
+    */
+    removeAllListeners: function(name) {
+        var events  = this.events;
+        if (name) {
+            if (!events[name]) {
+                return;
+            }
+            events[name].removeAllListeners();
+        }
+        else {
+            for (name in events) {
+                events[name].removeAllListeners();
+            }
+        }
+    },
+
+    /**
+    * Trigger an event -- call all listeners. Also triggers '*' event.
+    * @method
+    * @access public
+    * @param {string} name Event name { @required }
+    * @param {*} ... As many other params as needed
+    * @return mixed
+    */
+    trigger: function() {
+
+        var name = arguments[0],
+            events  = this.events,
+            e,
+            res = null;
+
+        name = name.toLowerCase();
+
+        if (events[name]) {
+            e = events[name];
+            res = e.trigger.apply(e, slice.call(arguments, 1));
+        }
+        
+        // trigger * event with current event name
+        // as first argument
+        if (e = events["*"]) {
+            e.trigger.apply(e, arguments);
+        }
+        
+        return res;
+    },
+
+    /**
+    * Suspend an event. Suspended event will not call any listeners on trigger().
+    * @method
+    * @access public
+    * @param {string} name Event name
+    */
+    suspendEvent: function(name) {
+        name = name.toLowerCase();
+        var events  = this.events;
+        if (!events[name]) {
+            return;
+        }
+        events[name].suspend();
+    },
+
+    /**
+    * @method
+    * @access public
+    */
+    suspendAllEvents: function() {
+        var events  = this.events;
+        for (var name in events) {
+            events[name].suspend();
+        }
+    },
+
+    /**
+    * Resume suspended event.
+    * @method
+    * @access public
+    * @param {string} name Event name
+    */
+    resumeEvent: function(name) {
+        name = name.toLowerCase();
+        var events  = this.events;
+        if (!events[name]) {
+            return;
+        }
+        events[name].resume();
+    },
+
+    /**
+    * @method
+    * @access public
+    */
+    resumeAllEvents: function() {
+        var events  = this.events;
+        for (var name in events) {
+            events[name].resume();
+        }
+    },
+
+    /**
+     * @method
+     * @access public
+     * @param {string} name Event name
+     */
+    destroyEvent: function(name) {
+        var events  = this.events;
+        if (events[name]) {
+            events[name].removeAllListeners();
+            events[name].destroy();
+            delete events[name];
+        }
+    },
+
+
+    /**
+    * Destroy observable
+    * @method
+    * @md-not-inheritable
+    * @access public
+    */
+    destroy: function() {
+        var self    = this,
+            events  = self.events;
+
+        for (var i in events) {
+            self.destroyEvent(i);
+        }
+
+        for (i in self) {
+            self[i] = null;
+        }
+    },
+
+    /**
+    * Although all methods are public there is getApi() method that allows you
+    * extending your own objects without overriding "destroy" (which you probably have)
+    * @code examples/api.js
+    * @method
+    * @md-not-inheritable
+    * @returns object
+    */
+    getApi: function() {
+
+        var self    = this;
+
+        if (!self.api) {
+
+            var methods = [
+                    "createEvent", "getEvent", "on", "un", "once", "hasListener", "removeAllListeners",
+                    "trigger", "suspendEvent", "suspendAllEvents", "resumeEvent",
+                    "resumeAllEvents", "destroyEvent",
+                    "relayEvent", "unrelayEvent"
+                ],
+                api = {},
+                name;
+
+            for(var i =- 1, l = methods.length;
+                    ++i < l;
+                    name = methods[i],
+                    api[name] = bind(self[name], self)){}
+
+            self.api = api;
+        }
+
+        return self.api;
+
+    }
+}, true, false);
+
+
+
+
+
+
+/**
+ * @mixin Observable
+ * @description Mixin adds observable features to the host object.
+ *              It adds 'callback' option to the host config. See $beforeInit.
+ *              Mixin is designed for MetaphorJs class system.
+ * @code examples/mixin.js
+ */
+ns.register("mixin.Observable", {
+
+    /**
+     * @private
+     * @type {Observable}
+     * @description You can use this instance in your $init function
+     */
+    $$observable: null,
+
+    /**
+     * @private
+     * @type {object}
+     */
+    $$callbackContext: null,
+
+    /**
+     * @protected
+     * @type {object} {
+     *      Override this to define event properties. 
+     *      Object's key is event name, value - either returnResult or 
+     *      options object. See {@link class:Observable.createEvent}
+     * }
+     */
+    $$events: null,
+
+    /**
+     * @method
+     * @private
+     * @param {object} cfg {
+     *      This is a config that was passed to the host object's constructor.
+     *      It is being passed to mixin's $beforeInit automatically.
+     *      @type {object} callback {
+     *          Here, except for 'context', '$context' and 'scope', 
+     *          keys are event names and values are listeners. 
+     *          @type {object} context All given listeners context
+     *          @type {object} scope The same
+     *      }
+     * }
+     */
+    $beforeInit: function(cfg) {
+        var self = this;
+        self.$$observable = new Observable;
+        self.$initObservable(cfg);
+    },
+
+    /**
+     * @method
+     * @private
+     * @ignore
+     * @param {object} cfg
+     */
+    $initObservable: function(cfg) {
+
+        var self    = this,
+            obs     = self.$$observable,
+            i;
+
+        if (cfg && cfg.callback) {
+            var ls = cfg.callback,
+                context = ls.context || ls.scope || ls.$context,
+                events = extend({}, self.$$events, ls.$events, true, false);
+
+            for (i in events) {
+                obs.createEvent(i, events[i]);
+            }
+
+            ls.context = null;
+            ls.scope = null;
+
+            for (i in ls) {
+                if (ls[i]) {
+                    obs.on(i, ls[i], context || self);
+                }
+            }
+
+            cfg.callback = null;
+
+            if (context) {
+                self.$$callbackContext = context;
+            }
+        }
+        else if (self.$$events) {
+            for (i in self.$$events) {
+                obs.createEvent(i, self.$$events[i]);
+            }
+        }
+    },
+
+    /**
+     * @method
+     * @see {@link class:Observable.on}
+     */
+    on: function() {
+        var o = this.$$observable;
+        return o ? o.on.apply(o, arguments) : null;
+    },
+
+    /**
+     * @method
+     * @see {@link class:Observable.un}
+     */
+    un: function() {
+        var o = this.$$observable;
+        return o ? o.un.apply(o, arguments) : null;
+    },
+
+    /**
+     * @method
+     * @see {@link class:Observable.once}
+     */
+    once: function() {
+        var o = this.$$observable;
+        return o ? o.once.apply(o, arguments) : null;
+    },
+
+    /**
+     * @method
+     * @see {@link class:Observable.trigger}
+     */
+    trigger: function() {
+        var o = this.$$observable;
+        return o ? o.trigger.apply(o, arguments) : null;
+    },
+
+    /**
+     * @method
+     * @private
+     * @ignore
+     */
+    $beforeDestroy: function() {
+        this.$$observable.trigger("before-destroy", this);
+    },
+
+    /**
+     * @method
+     * @private
+     * @ignore
+     */
+    $afterDestroy: function() {
+        var self = this;
+        self.$$observable.trigger("destroy", self);
+        self.$$observable.destroy();
+        self.$$observable = null;
+    }
+});
+
+
+
+
+
+
+var Base = defineClass({
+
+    $class: "Base",
+    $mixins: ["mixin.Observable"],
+
+    $init: function(options) {
+        this.options = {};
+
+        if (options) {
+            this.setOptions(options);
+        }
+    },
+
+    /**
+     * Get option value
+     * @method
+     * @param {string} name
+     * @param {*} defValue
+     * @returns {*|null}
+     */
+    getOption: function(name, defValue) {
+        return this.options[name] || defValue || null;
+    },
+
+    /**
+     * Get all options
+     * @method
+     * @returns {object}
+     */
+    getOptions: function() {
+        return copy(this.options);
+    },
+
+    /**
+     * Set options
+     * @method
+     * @param {object} opts
+     */
+    setOptions: function(opts) {
+        if (opts) {
+            for (var key in opts) {
+                this.setOption(key, opts[key]);
+            }
+        }
+    },
+
+    /**
+     * Set option
+     * @method
+     * @param {string} name
+     * @param {*} value
+     */
+    setOption: function(name, value) {
+        if (this.$$observable.hasEvent("set_" + name)) {
+            this.trigger("set_" + name, value, this, name);
+        }
+        else {
+            this.options[name] = value;
+        }
+    },
+
+    _setArrayOption: function(value, self, name) {
+        var curr = this.getOption(name);
+
+        if (!isArray(value)) {
+            value = [value];
+        }
+
+        if (curr === null) {
+            curr = [];
+        }
+
+        value.forEach(function(v){
+            if (curr.indexOf(v) === -1) {
+                curr.push(v);
+            }
+        });
+
+        this.options[name] = curr;
+    }
+
+});
+
+
+
+
+var isDir = function(dirPath) {
+    return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+};
+
+
+
+
+/**
+ * Resolve path or file pattern to an asbolute path or file pattern
+ * @function
+ * @param {string} toResolve 
+ * @param {array} locations 
+ * @param {string} resolveDir 
+ */
+var resolvePath = function(toResolve, locations, resolveDir) {
+
+    if (!toResolve) {
+        return null;
+    }
+
+    locations = locations || [];
+
+    if (process.env.METAPHORJS_PATH) {
+        locations.push(process.env.METAPHORJS_PATH);
+    }
+    if (process.env.NODE_PATH) {
+        locations = locations.concat(process.env.NODE_PATH.split(path.delimiter));
+    }
+
+    try {
+        var resolved = require.resolve(toResolve, {
+            paths: locations
+        });
+        if (resolved) {
+            return resolved;
+        }
+    }
+    catch (thrown) {}
+
+    var norm = toResolve,
+        inx,
+        i, l,
+        loc,
+        dirMode = !!resolveDir,
+        abs = norm.substr(0, 1) === "/";
+
+    while ((inx = norm.indexOf('*')) !== -1) {
+        norm = norm.substr(0, inx);
+        norm = norm.split('/');
+        norm.pop();
+        norm = norm.join("/");
+        dirMode = true;
+    }
+
+    if (abs) {
+        if (fs.existsSync(norm)) {
+            if (dirMode || !isDir(norm)) {
+                return path.normalize(norm) + toResolve.replace(norm, "");
+            }
+        }
+    }
+
+    for (i = 0, l = locations.length; i < l; i++) {
+        loc = locations[i];
+
+        if (loc.substr(loc.length - 1) !== '/') {
+            loc += '/';
+        }
+
+        if (fs.existsSync(loc + norm)) {
+            if (dirMode || !isDir(loc + norm)) {
+                return path.normalize(loc + norm) + toResolve.replace(norm, "");
+            }
+        }
+    }
+
+    /*try {
+        return require.resolve(toResolve);
+    }
+    catch (thrown) {}*/
+
+    
+
+    return null;
+};
+
+
+
+/**
+ * @class Import
+ */
+var Import = Base.$extend({
+    $class: "Import",
+
+    id: null,
+    type: null,
+    module: null,
+    file: null,
+    sub: null,
+    in: null,
+    names: null, // import as
+    fromMap: null,
+    skip: false,
+
+    /**
+     * @constructor
+     * @param {object} cfg {
+     *  @type {string} type
+     *  @type {string} module
+     *  @type {File} file
+     *  @type {string} sub
+     *  @type {array} names
+     *  @type {File} in In which file import happens
+     * }
+     */
+    $init: function(cfg) {
+
+        this.names = [];
+        this.fromMap = {};
+        this.id = nextUid();
+        extend(this, cfg, true, false);
+    },
+
+    /**
+     * Create copy of this import
+     * @method
+     */
+    createCopy: function() {
+        var self = this;
+        return new self.$self({
+            type: self.type,
+            module: self.module,
+            file: self.file,
+            sub: self.sub,
+            names: self.names.slice(),
+            in: self.in.slice(),
+            fromMap: extend({}, self.fromMap)
+        });
+    },
+
+    /**
+     * Is this the same or similar import
+     * @method
+     * @param {object|Import} def {
+     *  @type {string} module
+     *  @type {string} sub
+     *  @type {File} file
+     * }
+     */
+    is: function(def) {
+        if (def.file && this.file && this.file.id === def.file.id) {
+            return true;
+        }
+        if (def.module && def.module === this.module && def.sub == this.sub) {
+            return true;
+        }
+        return false;
+    },
+
+    /**
+     * Is this import skipped
+     * @method
+     * @returns {bool}
+     */
+    isSkipped: function() {
+        return this.skip;
+    },
+
+    /**
+     * Set this file skipped
+     * @method
+     * @param {bool} state
+     */
+    setSkipped: function(state) {
+        this.skip = state;
+    },
+
+    /**
+     * Is this a module import
+     * @method
+     * @returns {bool}
+     */
+    isModule: function() {
+        return this.module !== null;
+    },
+    
+    /**
+     * Is this a file import
+     * @method
+     * @returns {bool}
+     */
+    isFile: function() {
+        return this.file !== null;
+    },
+
+    /**
+     * Add names to which import is assigned
+     * @method
+     * @param {array} names
+     */
+    addNames: function(names) {
+        names.forEach(this.addName, this);
+    },
+
+    /**
+     * Add files in which import happens
+     * @method
+     * @param {array} in
+     */
+    addIn: function(parents) {
+        var self = this;
+        parents.forEach(function(parent){
+            if (self.in.indexOf(parent) === -1) {
+                self.in.push(parent);
+            }
+        });
+    },
+
+    /**
+     * Add name to which import is assigned
+     * @method
+     * @param {string} name
+     */
+    addName: function(name) {
+        if (this.names.indexOf(name) === -1) {
+            this.names.push(name);
+        }
+    },
+
+    /**
+     * Has assigned name
+     * @method
+     * @param {string} name
+     * @returns {bool}
+     */
+    hasName: function(name) {
+        return this.names.indexOf(name) !== -1;
+    },
+
+    /**
+     * Remove assigned name
+     * @method
+     * @param {string} name
+     */
+    removeName: function(name) {
+        var inx = this.names.indexOf(name);
+        if (inx !== -1) {
+            this.names.splice(inx, 1);
+        }
+    },
+
+    /**
+     * Set name map. When one of the import names
+     * is overlapping with another import,
+     * we wrap parent file and assign 
+     * 
+     */
+    setNameFrom: function(name, from) {
+        this.fromMap[name] = from;
+    },
+
+    /**
+     * Get import code
+     * @method
+     * @returns {string}
+     */
+    getCode: function() {
+        return "require(\"" + this.module + "\");"
+    },
+
+    /**
+     * @ignore
+     */
+    toString: function() {
+        return this.getCode();
+    }
+});
+
+
+
+Base.$extend({
+
+    $class: "plugin.file.NodeModule",
+    host: null,
+
+    $init: function(host) {
+        this.host = host;
+    },
+
+    $afterHostInit: function() {
+        var self = this;
+        self.host.on("collect-file-info", self.collectFileInfo, self);
+    },
+
+    collectFileInfo: function(file) {
+
+        if (file.path.indexOf("/node_modules/") !== -1) {
+
+            var parts = file.path.split("/node_modules/"),
+                moduleName = parts[1].split("/")[0],
+                pkg = parts[0] + "/node_modules/" + moduleName + "/package.json",
+                pkgJson = JSON.parse(fs.readFileSync(pkg))
+            
+            return {
+                
+                npm: {
+                    module: moduleName,
+                    version: pkgJson.version
+                }
+            };
+        }
+    }
+});
+
+
+Base.$extend({
+
+    $class: "plugin.code.Cleanup",
+    host: null,
+
+    $init: function(host) {
+        this.host = host;
+    },
+
+    $afterHostInit: function() {
+        this.host.on("cleanup-code", this.cleanupCode, this);
+    },
+
+    cleanupCode: function(content) {
+        var rEmptyVar = /var[\s|,]*;/g,
+            rTrailComma = /,\s*;/g,
+            rStrict = new RegExp("'use "+ "strict'|" + '"use ' + 'strict";?', "g"),
+            rVarSpace = /var\s+/g;
+
+        content = content.replace(rStrict, "");
+        content = content.replace(rVarSpace, "var ");
+        content = content.replace(rEmptyVar, "");
+        content = content.replace(rTrailComma, ";");
+
+        return content;
+    }
+});
+
+
+/**
+ * @plugin plugin.file.CodeInfo
+ */
+Base.$extend({
+
+    $class: "plugin.code.Info",
+    host: null,
+
+    $init: function(host) {
+        this.host = host;
+    },
+    
+    $afterHostInit: function() {
+        var self = this;
+        self.host.on("collect-code-info", self.onCollectCodeInfo, self);
+        self.host.on("collect-imports", self.getFileReqs, self);
+        self.host.on("decide-wrapping", self.needsWrapping, self);
+        self.host.on("decide-module-exports", self.whatToDoWithEs5Export, self);
+    },
+
+    onCollectCodeInfo: function(code) {
+        var estree = esprima.parseModule(code),
+            body = estree.body,
+            stats = {
+                "module.exports": null,
+                "wrappedFuncCall": 0,
+                "rootFuncCall": 0,
+                "total": 0,
+                "firstIdentifier": null,
+                "firstIdType": null,
+                "firstIdExpression": 0,
+                "declarations": 0,
+                "statements": 0,
+                "expressions": 0,
+                "exportsAnonymous": false,
+                "exportsFirstId": false
+            },
+            typeReg = /(statement|declaration|expression)$/i,
+            i, l, entry, j, jl,
+            type, decl, match,
+            statType;
+
+        for (i = 0, l = body.length; i < l; i++) {
+            entry = body[i];
+            type = entry.type;
+
+            // first var/func/class declaration
+            if (!stats.firstIdentifier) {
+                if (type == "VariableDeclaration") {
+                    for (j = 0, jl = entry.declarations.length; j < jl; j++) {
+                        decl = entry.declarations[j];
+                        if (decl.id && decl.id.type == "Identifier") {
+                            stats.firstIdentifier = decl.id.name;
+                            stats.firstIdType = "variable";
+                            break;
+                        }
+                    }
+                }
+                else if (type == "FunctionDeclaration" || 
+                        type == "ClassDeclaration") {
+                    if (entry.id && entry.id.type == "Identifier") {
+                        stats.firstIdentifier = entry.id.name;
+                        stats.firstIdType = type.replace("Declaraion").toLowerCase();
+                    }
+                }
+            }
+
+            // top level wrapper func
+            if (type == "ExpressionStatement" && 
+                entry.expression.type == "CallExpression" &&
+                entry.expression.callee.type == "FunctionExpression") {
+
+                if (entry.expression.callee.id == null) {
+                    stats.wrappedFuncCall++;
+                }
+                else {
+                    stats.rootFuncCall++;
+                }
+            }
+
+            // saving module.exports expression
+            if (type == "ExpressionStatement" && 
+                entry.expression.type == "AssignmentExpression" &&
+                entry.expression.left.type == "MemberExpression") {
+
+                if (entry.expression.left.object.name == "module" &&
+                    entry.expression.left.property.name == "exports") {
+                    stats['module.exports'] = true; //entry.expression.right;
+
+                    var right = entry.expression.right;
+                    if (right.type == "FunctionExpression") {
+                        if (right.id === null) {
+                            stats.exportsAnonymous = true;
+                        }
+                        else if (!stats.firstIdentifier && right.id.name) {
+                            stats.firstIdentifier = right.id.name;
+                        }
+                    }
+                    else if (right.type == "Identifier" && 
+                            right.name == stats.firstIdentifier) {
+                        stats.exportsFirstId = true;
+                    }
+                    // do not count this one
+                    continue;
+                }
+
+                if (entry.expression.left.object.name == stats.firstIdentifier) {
+                    stats.firstIdExpression++;
+                }
+            }
+
+            // variable declarations can have multiple per entry
+            if (type == "VariableDeclaration") {
+                stats.declarations += entry.declarations.length;
+                stats.total++;
+            }
+            // others have one
+            else {
+                match = type.match(typeReg);
+
+                if (match) {
+                    statType = match[0].toLowerCase() + "s";
+                    stats[statType]++;
+                    stats.total++;
+                }
+            }
+        }
+
+        return stats;
+    },
+
+    /**
+     * Get a list of module dependencies
+     * @method
+     * @param {string} content
+     * @returns {array} {
+     *  @type {string} type 'require' | 'import'
+     *  @type {array} names 
+     *  @type {string} module Module name or file path
+     *  @type {string} sub <code>require("a").b.c</code> would be <code>.b.c</code>
+     *  @type {array} range [start, end] index positions
+     * }
+     */
+    getFileReqs: function(content) {
+
+        var data = esprima.parseModule(content, {range: true}),
+            reqs = [];
+
+        var add = function(name, mod, subprop, range) {
+            reqs.push({
+                type: "require",
+                names: name ? [name] : [],
+                module: mod,
+                sub: subprop,
+                range: range
+            });
+        };
+
+        var isMemberExpressionOfRequire = function(obj) {
+            if (obj.object && obj.object.type == "CallExpression" &&
+                obj.object.callee.name == "require") {
+                return {
+                    mod: obj.object.arguments[0].value,
+                    subNames: [obj.property.name]
+                };
+            }
+            if (obj.object && obj.object.type == "MemberExpression") {
+                var res = isMemberExpressionOfRequire(obj.object);
+                if (res !== false) {
+                    res.subNames.unshift(obj.property.name)
+                    return res;
+                }
+            }
+            return false;
+        };
+
+        data.body.forEach(function(entry){
+            if (entry.type == "VariableDeclaration") {
+                entry.declarations.forEach(function(decl){
+                    if (!decl.id || decl.id.type != "Identifier") {
+                        return;
+                    }
+                    if (decl.init && decl.init.type == "CallExpression" &&
+                        decl.init.callee.name == "require") {
+                        add(decl.id.name, decl.init.arguments[0].value, null, decl.range);
+                    }
+                    var res;
+                    if (decl.init && decl.init.type == "MemberExpression" && 
+                        (res = isMemberExpressionOfRequire(decl.init)) !== false) {
+                        add(decl.id.name, res.mod, "." + res.subNames.join("."), decl.range);
+                    }
+                });
+            }
+
+            if (entry.type == "ExpressionStatement" && 
+                entry.expression.type == "CallExpression" &&
+                entry.expression.callee.name == "require") {
+                add(null, entry.expression.arguments[0].value, null, entry.range);
+            }
+        });
+
+        return reqs;
+    },
+
+    /**
+     * Does this file needs a var name in global space
+     * @method
+     * @returns {bool}
+     */
+    hasAliases: function() {
+        var file = this.host,
+            as = file.getOption("as");
+        return as && as.length > 0;
+    },
+
+
+
+    /**
+     * Does this module needs wrapping
+     * @method
+     * @param {object} codeInfo
+     * @param {File} file
+     * @returns {bool}
+     */
+    needsWrapping: function(file) {
+
+        var codeInfo = file.getCodeInfo();
+
+        //console.log(file.path)
+        //console.log(JSON.stringify(codeInfo))
+
+        // more than one declaration (class/var/func)
+        if (codeInfo.declarations > 1) {
+            return true;
+        }
+        // at least one top-level statement for/while/if/etc
+        if (codeInfo.expressions > 0) {
+            return true;
+        }
+        // at least one expression except wrapped func calls
+        // and module exports
+        if (codeInfo.statements - codeInfo.wrappedFuncCall - 
+            codeInfo.rootFuncCall - codeInfo.firstIdExpression -
+            (codeInfo['module.exports'] ? 1 : 0) > 0) {
+            return true;
+        }
+
+        // if there is only one declaration and it is being exported
+        // then this module doesn't need wrapping.
+        if (codeInfo.declarations === 1) {
+            if (codeInfo['module.exports']) {
+                if (codeInfo['module.exports'].type == "Identifier") {
+                    return codeInfo['module.exports'].name != codeInfo.firstIdentifier;
+                }
+            }
+            // otherwise, it does need wrapping
+            //return true;
+        }
+
+        return false;
+    },
+
+    whatToDoWithEs5Export: function(file) {
+        var info = file.getCodeInfo(),
+            as = file.getOption("as");
+        if (file.needsWrapping()) {
+            return {return: true};
+        }
+        else {
+            if (info.exportsFirstId) {
+                return {removeAll: true};
+            }
+            else if (info.exportsAnonymous) {
+                return {varName: file.getUniqueName()};
+            }
+            else if (!info.firstIdentifier && as) {
+                return {varName: file.getUniqueName()};
+            }
+            /*else if (info.exportsAnonymous || !info.firstIdentifier) {
+                return {varName: file.getUniqueName()};
+            }*/
+        }
+        return null;
+    }
+
+});
+
+
+Base.$extend({
+
+    $class: "plugin.code.Generator",
+    host: null,
+
+    $init: function(host) {
+        this.host = host;
+    },
+
+    $afterHostInit: function() {
+        var self = this,
+            host = this.host;
+
+        host.$$observable.createEvent("code-wrap", "pipe");
+        host.$$observable.createEvent("code-replace-export", "pipe");
+        host.$$observable.createEvent("code-prepend-var", "pipe");
+        host.$$observable.createEvent("code-return", "pipe");
+        host.$$observable.createEvent("code-expose", "pipe");
+        host.$$observable.createEvent("code-module-imports", "concat");
+        host.$$observable.createEvent("code-wrapped-imports", "concat");
+        host.$$observable.createEvent("code-export", "first");
+
+        host.on("code-wrap", self.wrap, self);
+        host.on("code-replace-export", self.replaceEs5Export, self);
+        host.on("code-replace-export", self.replaceEs6Export, self);
+        host.on("code-prepend-var", self.prependVar, self);
+        host.on("code-return", self.returnVar, self);
+        host.on("code-expose", self.exposeVars, self);
+        host.on("code-module-imports", self.moduleImports, self);
+        host.on("code-wrapped-imports", self.wrappedImports, self);
+        host.on("code-export", self.export, self);
+    },
+
+    wrap: function(code) {
+        return "(function(){\n" + code + "\n}());";
+    },
+
+    replaceEs5Export: function(code, action) {
+        var repl = "";
+        if (action) {
+            if (action.varName) { 
+                repl = "var " + action.varName + " = ";
+            }
+            else if (action.return) {
+                repl = "return ";
+            }
+            else if (action.removeAll) {
+                return code.replace(/module\s*\.exports\s*=\s*[^\s]+\s*;?/, "");        
+            }
+        }
+        return code.replace(/module\s*\.exports\s*=\s*/, repl);
+    },
+
+    replaceEs6Export: function(code, withWhat) {
+        return code;
+    },
+
+    returnVar: function(code, varName) {
+        if (varName) {
+            return code + "\n\nreturn " + varName + ";\n";
+        }
+        return code;
+    },
+
+    prependVar: function(code, varName) {
+        return "var " + varName + " = " + code;
+    },
+
+    
+
+    moduleImports: function() {
+        var self = this,
+            bundle = self.host,
+            code = "\nvar ",
+            all = [];
+
+        bundle.getImports("module").forEach(function(imp){
+            all = all.concat(imp.names);
+        });
+
+        if (all.length) {
+
+            code += all.join(", ") + ";\n";
+            code += bundle.getImports("module")
+                    .map(function(imp){
+                        return imp.names.join(" = ") + 
+                                " = " +
+                                "require(\"" + imp.module + "\")" + 
+                                (imp.sub || "");
+                    })
+                    .join(";\n") + ";\n";
+
+            return [code];
+        }
+        
+        return [""];
+    },
+
+    wrappedImports: function() {
+        var self = this,
+            file = self.host,
+            code = [];
+
+        file.getImports("file").forEach(function(imp){
+            for (var name in imp.fromMap) {
+                var from = imp.fromMap[name];
+                if (typeof from === "string") {
+                    from = [from];
+                }
+                code.push("var " + name + " = " + from.join(".") + ";");
+            }
+        });
+
+        if (code.length) {
+            code.unshift("\n");
+        }
+
+        return code;
+    },
+
+    exposeVars: function(code, exposeIn, exposeList) {
+        var exp = "\nvar " + exposeIn + " = {};\n";
+        exposeList.forEach(function(name){
+            exp += exposeIn + "['" + name + "'] = " + name + ";\n";
+        });
+
+        return code + exp;
+    },
+
+    export: function(name) {
+        return "\nmodule.exports = " + name + ";\n";
+    }
+});
+
+
+
+/**
+ * @mixin mixin.WithImports
+ */
+ns.register("mixin.WithImports", {
+
+    imports: null,
+    importedBy: null,
+
+    $beforeInit: function() {
+        this.imports = [];
+        this.importedBy = [];
+    },
+
+    $afterInit: function() {
+        var self = this;
+
+        self.$$observable.createEvent("add-import", false);
+        self.$$observable.createEvent("add-imported-by", false);
+
+        self.on("add-import", function(def){
+            return !self.doesImport(def);
+        });
+
+        self.on("add-imported-by", function(def){
+            var imported = self.isImportedBy(def);
+            if (imported) {
+                imported.addNames(def.names);
+                def.in && imported.addIn(def.in);
+            }
+            return !imported;
+        });
+    },
+
+    /**
+     * Does this file import another file or module
+     * @method
+     * @param {object} def import object
+     * @returns Import|bool 
+     */
+    doesImport: function(def) {
+        return !!this.imports.find(function(imp){
+            return imp.is(def);
+        });
+    },
+
+    /**
+     * Get import definition
+     * @method
+     * @param {Import|object} def
+     * @returns {Import|null}
+     */
+    getImport: function(def) {
+        return this.imports.find(function(imp){
+            return imp.is(def);
+        });
+    },
+
+    /**
+     * Does this file import another file
+     * @method
+     * @param {File} file
+     * @returns bool
+     */
+    doesImportFile: function(file) {
+        return this.doesImport({
+            file: file
+        });
+    },
+
+    /**
+     * Does this file import module
+     * @method
+     * @param {string} name
+     * @param {string} sub
+     * @returns bool
+     */
+    doesImportModule: function(name, sub) {
+        return this.doesImport({
+            module: name,
+            sub: sub || null
+        });
+    },
+
+    /**
+     * Add import
+     * @method
+     * @param {Import} imp
+     */
+    addImport: function(imp) {
+        var self = this;
+        if (self.trigger("add-import", imp, self) !== false) {
+            self.imports.push(imp);
+        }
+    },
+
+    /**
+     * Is this file imported by another file
+     * @method
+     * @param {File} file 
+     * @returns {bool|object}
+     */
+    isImportedBy: function(file) {
+        return !!this.importedBy.find(function(imp){
+            return imp.file === file;
+        });
+    },
+
+    /**
+     * Get import definition of parent file
+     * @method
+     * @param {File} file
+     * @returns {Import}
+     */
+    getImportedBy: function(file) {
+        return this.importedBy.find(function(imp){
+            return imp.file === file;
+        });
+    },
+
+    /**
+     * Add link to parent file
+     * @method
+     * @param {Import} imp
+     */
+    addImportedBy: function(imp) {
+        var self = this;
+        if (self.trigger("add-imported-by", imp, self) !== false) {
+            self.importedBy.push(imp);
+        }
+    },
+
+    /**
+     * Return all module imports
+     * @method
+     * @param {string|null} type
+     * @param {bool} deep {
+     *  @default false
+     * }
+     * @param {bool} copy {
+     *  @default true
+     * }
+     * @returns {array}
+     */
+    getImports: function(type, deep, copy){
+        var imports = [],
+            self = this;
+
+        if (typeof copy == "undefined") {
+            copy = true;
+        }
+
+        var filter = function(imp){
+            if (!type || 
+                (type === "module" && imp.module) ||
+                (type === "file" && imp.file)) {
+                imports.push(copy ? imp.createCopy() : imp);
+            }
+        };
+
+        if (deep && self.buildList) {
+            self.buildList.forEach(function(entry){
+                entry.getImports(type).forEach(filter);
+            });
+        }
+
+        self.imports.forEach(filter);
+
+        return imports;
+    },
+
+    /**
+     * Return list of files that import this one
+     * @method
+     * @returns array
+     */
+    getParents: function() {
+        return this.importedBy.slice();
+    }
+});
+var File = (function(){
+
+
+
+
+
+
+
+
+
+
+
+
+var all = {};
+
+/**
+ * @class File
+ */
+var File = Base.$extend({
+
+    $class: "File",
+    $mixins: ["mixin.WithImports"],
+
+    id: null,
+    path: null,
+    bundle: null,
+
+    $constructor: function() {
+        this.$plugins.push("plugin.file.NodeModule");
+        this.$plugins.push("plugin.code.Cleanup");
+        this.$plugins.push("plugin.code.Info");
+        this.$plugins.push("plugin.code.Generator");
+
+        this.$super(arguments);
+    },
+
+    /**
+     * Use File.get instead of constructor
+     * @constructor
+     * @param {string} filePath
+     * @param {object} options
+     */
+    $init: function(filePath, options) {
+
+        var self = this;
+
+        self.$$observable.createEvent("collect-imports", "concat");
+        self.$$observable.createEvent("collect-file-info", "merge");
+        self.$$observable.createEvent("collect-code-info", "merge");
+        self.$$observable.createEvent("cleanup-code", "pipe");
+        self.$$observable.createEvent("decide-wrapping", true);
+        self.$$observable.createEvent("decide-module-exports", "merge");
+
+        self.id         = nextUid();
+        self.path       = filePath;
+        self._processed = false;
+        self.content    = "";
+
+        self.on("set_as", self._setArrayOption, self);
+        self.on("set_as", self._setAsOption, self);
+        
+        self.$super(options);
+    },
+
+    /**
+     * Set current bundle
+     * @method
+     * @param {Bundle} bundle
+     */
+    setBundle: function(bundle) {
+        this.bundle = bundle;
+    },
+
+    /**
+     * Get unique variable name for this file
+     * @method
+     * @returns {string}
+     */
+    getUniqueName: function() {
+        var as = this.getOption("as"),
+            name;
+        if (as && as.length) {
+            name = as[0];
+        }
+        else {
+            name = path.basename(this.path, ".js");
+        } 
+        if (this.bundle.hasGlobalVar(name) && 
+            this.bundle.getGlobalVarOrigin(name) != this.path) {
+            return "f_" + this.id;
+        }
+        return name;
+    },
+
+    _setAsOption: function() {
+        if (this.options.as) {
+            var i, l = this.options.as.length;
+            for (i = 0; i < l; i++) {
+                if (this.options.as[i] === "*") {
+                    this.options.as[i] = path.basename(this.path, ".js");
+                }
+            } 
+        }
+    },
+
+    /**
+     * Process all global imports in the file
+     * @method
+     */
+    processReqs: function() {
+        var self = this;
+
+        if (self._processed) {
+            return;
+        }
+
+        self.content = self.getOriginalContent();
+        self._processed = true;
+
+        var reqs = self.trigger("collect-imports", self.content, self);
+
+        reqs.forEach(self._processReq, self);
+
+        // remove reqs from the code using ranges
+        reqs.sort(function(a, b) { 
+                return b.range[1] - a.range[1];
+            }).forEach(function(r) {
+                self.content = self.content.slice(0, r.range[0]) + 
+                                self.content.slice(r.range[1]);
+        });
+
+        self.content = self.trigger("cleanup-code", self.content);
+    },
+
+    _processReq: function(req) {
+
+        var self = this,
+            names = (req.names || []).slice(),
+            reqPath = req.module,
+            resPath;
+
+        if (typeof names === "string") {
+            names = [names];
+        }
+
+        // module import
+        if (reqPath.indexOf("./") !== 0 &&
+                reqPath.indexOf("../") !== 0 &&
+                reqPath.indexOf("*") === -1 &&
+                reqPath.indexOf("/") === -1 &&
+                !reqPath.match(/\.js$/)) {
+
+            self.addImport(new Import({
+                type: "require",
+                module: req.module,
+                sub: req.sub,
+                names: names,
+                in: [self]
+            }));
+            return; 
+        }
+        // file import
+        else {
+
+            resPath = resolvePath(reqPath, [path.dirname(self.path)]);
+
+            if (!resPath) {
+                throw reqPath + " required in " + self.path + " does not exist";
+            }
+
+            reqFile = File.get(resPath);
+
+            self.addImport(new Import({
+                type: "require",
+                file: reqFile,
+                names: names,
+                in: [self]
+            }));
+
+            reqFile.addImportedBy(new Import({
+                type: "require",
+                file: self,
+                names: names
+            }));
+        }
+    },
+
+    /**
+     * Collect file info from all plugins
+     * @method
+     * @returns {object}
+     */
+    getFileInfo: function(){
+        if (!this._fileInfo) {
+            this._fileInfo = this.trigger("collect-file-info", this);
+        }
+        return this._fileInfo;
+    },
+
+    /**
+     * Collect code info from all plugins
+     * @method
+     * @returns {object}
+     */
+    getCodeInfo: function(){
+        if (!this._codeInfo) {
+            this._codeInfo = this.trigger("collect-code-info", 
+                                            this.content || this.getOriginalContent());
+        }
+        return this._codeInfo;
+    },
+
+    
+    /**
+     * Get file content stripped of requires and with all options applied
+     * @method
+     * @returns {string}
+     */
+    getContent: function() {
+
+        var self = this,
+            name = self.getUniqueName(),
+            code = self.content;
+
+        code = self.trigger("cleanup-code", code);
+        code = self.trigger("code-wrapped-imports", self).join("\n") + code;
+
+        if (self.needsWrapping()) {
+            code = self.trigger("code-wrap", code);
+            code = self.trigger("code-prepend-var", code, name);
+        }
+
+        code = self.trigger("code-replace-export", code, 
+                            self.trigger('decide-module-exports', self));
+
+        return self.content = code;
+    },
+
+    /**
+     * Get current state of the code
+     * @method
+     * @returns {string}
+     */
+    getCurrentContent: function() {
+        return this.content;
+    },
+
+    /**
+     * Get original file content
+     * @method
+     * @returns {string}
+     */
+    getOriginalContent: function() {
+        return fs.readFileSync(this.path).toString();
+    },
+
+    /**
+     * Checks if this file can't be included to global scope
+     * without wrapping it first
+     * @method
+     * @returns {bool}
+     */
+    needsWrapping: function() {
+        return this.getOption("wrap") ||
+                this.trigger("decide-wrapping", this) || 
+                false;
+    },
+
+    /**
+     * @ignore
+     */
+    toString: function() {
+        return this.getContent();
+    }
+}, {
+
+    /**
+     * Singleton method. Use instead of constructor.
+     * @static
+     * @method
+     * @param {string} filePath 
+     * @param {object} options 
+     */
+    get: function(filePath, options) {
+        if (!all[filePath]) {
+            all[filePath] = new File(filePath, options);
+        }
+        else {
+            if (options) {
+                var f = all[filePath];
+                for (var key in options) {
+                    if (f.getOption(key) !== null) {
+                        f.setOption(key, options[key]);
+                    }
+                }
+            }
+        }
+    
+        return all[filePath];
+    }
+});
+
+return File;
+
+}());
+var bundle_1LX = (function(){
+/* BUNDLE START 1LX *//** Detect free variable `global` from Node.js. */
+var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+
+
+var root = (function(){
+
+
+/** Detect free variable `self`. */
+var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+
+/** Used as a reference to the global object. */
+var root = freeGlobal || freeSelf || Function('return this')();
+
+return root;
+
+}());
+
+
+/** Built-in value references. */
+var Symbol = root.Symbol;
+
+
+var getRawTag = (function(){
+
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var nativeObjectToString = objectProto.toString;
+
+/** Built-in value references. */
+var symToStringTag = Symbol ? Symbol.toStringTag : undefined;
+
+/**
+ * A specialized version of `baseGetTag` which ignores `Symbol.toStringTag` values.
+ *
+ * @private
+ * @param {*} value The value to query.
+ * @returns {string} Returns the raw `toStringTag`.
+ */
+function getRawTag(value) {
+  var isOwn = hasOwnProperty.call(value, symToStringTag),
+      tag = value[symToStringTag];
+
+  try {
+    value[symToStringTag] = undefined;
+    var unmasked = true;
+  } catch (e) {}
+
+  var result = nativeObjectToString.call(value);
+  if (unmasked) {
+    if (isOwn) {
+      value[symToStringTag] = tag;
+    } else {
+      delete value[symToStringTag];
+    }
+  }
+  return result;
+}
+
+return getRawTag;
+
+}());
+var objectToString = (function(){
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var nativeObjectToString = objectProto.toString;
+
+/**
+ * Converts `value` to a string using `Object.prototype.toString`.
+ *
+ * @private
+ * @param {*} value The value to convert.
+ * @returns {string} Returns the converted string.
+ */
+function objectToString(value) {
+  return nativeObjectToString.call(value);
+}
+
+return objectToString;
+
+}());
+var baseGetTag = (function(){
+
+
+/** `Object#toString` result references. */
+var nullTag = '[object Null]',
+    undefinedTag = '[object Undefined]';
+
+/** Built-in value references. */
+var symToStringTag = Symbol ? Symbol.toStringTag : undefined;
+
+/**
+ * The base implementation of `getTag` without fallbacks for buggy environments.
+ *
+ * @private
+ * @param {*} value The value to query.
+ * @returns {string} Returns the `toStringTag`.
+ */
+function baseGetTag(value) {
+  if (value == null) {
+    return value === undefined ? undefinedTag : nullTag;
+  }
+  return (symToStringTag && symToStringTag in Object(value))
+    ? getRawTag(value)
+    : objectToString(value);
+}
+
+return baseGetTag;
+
+}());
+/**
+ * Checks if `value` is the
+ * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
+ * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(_.noop);
+ * // => true
+ *
+ * _.isObject(null);
+ * // => false
+ */
+function isObject(value) {
+  var type = typeof value;
+  return value != null && (type == 'object' || type == 'function');
+}
+
+
+var isFunction = (function(){
+
+
+/** `Object#toString` result references. */
+var asyncTag = '[object AsyncFunction]',
+    funcTag = '[object Function]',
+    genTag = '[object GeneratorFunction]',
+    proxyTag = '[object Proxy]';
+
+/**
+ * Checks if `value` is classified as a `Function` object.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a function, else `false`.
+ * @example
+ *
+ * _.isFunction(_);
+ * // => true
+ *
+ * _.isFunction(/abc/);
+ * // => false
+ */
+function isFunction(value) {
+  if (!isObject(value)) {
+    return false;
+  }
+  // The use of `Object#toString` avoids issues with the `typeof` operator
+  // in Safari 9 which returns 'object' for typed arrays and other constructors.
+  var tag = baseGetTag(value);
+  return tag == funcTag || tag == genTag || tag == asyncTag || tag == proxyTag;
+}
+
+return isFunction;
+
+}());
+
+
+/** Used to detect overreaching core-js shims. */
+var coreJsData = root['__core-js_shared__'];
+
+
+var isMasked = (function(){
+
+
+/** Used to detect methods masquerading as native. */
+var maskSrcKey = (function() {
+  var uid = /[^.]+$/.exec(coreJsData && coreJsData.keys && coreJsData.keys.IE_PROTO || '');
+  return uid ? ('Symbol(src)_1.' + uid) : '';
+}());
+
+/**
+ * Checks if `func` has its source masked.
+ *
+ * @private
+ * @param {Function} func The function to check.
+ * @returns {boolean} Returns `true` if `func` is masked, else `false`.
+ */
+function isMasked(func) {
+  return !!maskSrcKey && (maskSrcKey in func);
+}
+
+return isMasked;
+
+}());
+var toSource = (function(){
+/** Used for built-in method references. */
+var funcProto = Function.prototype;
+
+/** Used to resolve the decompiled source of functions. */
+var funcToString = funcProto.toString;
+
+/**
+ * Converts `func` to its source code.
+ *
+ * @private
+ * @param {Function} func The function to convert.
+ * @returns {string} Returns the source code.
+ */
+function toSource(func) {
+  if (func != null) {
+    try {
+      return funcToString.call(func);
+    } catch (e) {}
+    try {
+      return (func + '');
+    } catch (e) {}
+  }
+  return '';
+}
+
+return toSource;
+
+}());
+var baseIsNative = (function(){
+
+
+/**
+ * Used to match `RegExp`
+ * [syntax characters](http://ecma-international.org/ecma-262/7.0/#sec-patterns).
+ */
+var reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
+
+/** Used to detect host constructors (Safari). */
+var reIsHostCtor = /^\[object .+?Constructor\]$/;
+
+/** Used for built-in method references. */
+var funcProto = Function.prototype,
+    objectProto = Object.prototype;
+
+/** Used to resolve the decompiled source of functions. */
+var funcToString = funcProto.toString;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/** Used to detect if a method is native. */
+var reIsNative = RegExp('^' +
+  funcToString.call(hasOwnProperty).replace(reRegExpChar, '\\$&')
+  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
+);
+
+/**
+ * The base implementation of `_.isNative` without bad shim checks.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a native function,
+ *  else `false`.
+ */
+function baseIsNative(value) {
+  if (!isObject(value) || isMasked(value)) {
+    return false;
+  }
+  var pattern = isFunction(value) ? reIsNative : reIsHostCtor;
+  return pattern.test(toSource(value));
+}
+
+return baseIsNative;
+
+}());
+/**
+ * Gets the value at `key` of `object`.
+ *
+ * @private
+ * @param {Object} [object] The object to query.
+ * @param {string} key The key of the property to get.
+ * @returns {*} Returns the property value.
+ */
+function getValue(object, key) {
+  return object == null ? undefined : object[key];
+}
+
+
+
+
+/**
+ * Gets the native function at `key` of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {string} key The key of the method to get.
+ * @returns {*} Returns the function if it's native, else `undefined`.
+ */
+function getNative(object, key) {
+  var value = getValue(object, key);
+  return baseIsNative(value) ? value : undefined;
+}
+
+
+
+
+/* Built-in method references that are verified to be native. */
+var nativeCreate = getNative(Object, 'create');
+
+
+
+
+/**
+ * Removes all key-value entries from the hash.
+ *
+ * @private
+ * @name clear
+ * @memberOf Hash
+ */
+function hashClear() {
+  this.__data__ = nativeCreate ? nativeCreate(null) : {};
+  this.size = 0;
+}
+
+
+/**
+ * Removes `key` and its value from the hash.
+ *
+ * @private
+ * @name delete
+ * @memberOf Hash
+ * @param {Object} hash The hash to modify.
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function hashDelete(key) {
+  var result = this.has(key) && delete this.__data__[key];
+  this.size -= result ? 1 : 0;
+  return result;
+}
+
+
+var hashGet = (function(){
+
+
+/** Used to stand-in for `undefined` hash values. */
+var HASH_UNDEFINED = '__lodash_hash_undefined__';
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Gets the hash value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf Hash
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function hashGet(key) {
+  var data = this.__data__;
+  if (nativeCreate) {
+    var result = data[key];
+    return result === HASH_UNDEFINED ? undefined : result;
+  }
+  return hasOwnProperty.call(data, key) ? data[key] : undefined;
+}
+
+return hashGet;
+
+}());
+var hashHas = (function(){
+
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Checks if a hash value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf Hash
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function hashHas(key) {
+  var data = this.__data__;
+  return nativeCreate ? (data[key] !== undefined) : hasOwnProperty.call(data, key);
+}
+
+return hashHas;
+
+}());
+var hashSet = (function(){
+
+
+/** Used to stand-in for `undefined` hash values. */
+var HASH_UNDEFINED = '__lodash_hash_undefined__';
+
+/**
+ * Sets the hash `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf Hash
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the hash instance.
+ */
+function hashSet(key, value) {
+  var data = this.__data__;
+  this.size += this.has(key) ? 0 : 1;
+  data[key] = (nativeCreate && value === undefined) ? HASH_UNDEFINED : value;
+  return this;
+}
+
+return hashSet;
+
+}());
+var Hash = (function(){
+
+
+/**
+ * Creates a hash object.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function Hash(entries) {
+  var index = -1,
+      length = entries == null ? 0 : entries.length;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+// Add methods to `Hash`.
+Hash.prototype.clear = hashClear;
+Hash.prototype['delete'] = hashDelete;
+Hash.prototype.get = hashGet;
+Hash.prototype.has = hashHas;
+Hash.prototype.set = hashSet;
+
+return Hash;
+
+}());
+/**
+ * Removes all key-value entries from the list cache.
+ *
+ * @private
+ * @name clear
+ * @memberOf ListCache
+ */
+function listCacheClear() {
+  this.__data__ = [];
+  this.size = 0;
+}
+
+
+/**
+ * Performs a
+ * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+ * comparison between two values to determine if they are equivalent.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ * @example
+ *
+ * var object = { 'a': 1 };
+ * var other = { 'a': 1 };
+ *
+ * _.eq(object, object);
+ * // => true
+ *
+ * _.eq(object, other);
+ * // => false
+ *
+ * _.eq('a', 'a');
+ * // => true
+ *
+ * _.eq('a', Object('a'));
+ * // => false
+ *
+ * _.eq(NaN, NaN);
+ * // => true
+ */
+function eq(value, other) {
+  return value === other || (value !== value && other !== other);
+}
+
+
+
+
+/**
+ * Gets the index at which the `key` is found in `array` of key-value pairs.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {*} key The key to search for.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function assocIndexOf(array, key) {
+  var length = array.length;
+  while (length--) {
+    if (eq(array[length][0], key)) {
+      return length;
+    }
+  }
+  return -1;
+}
+
+
+var listCacheDelete = (function(){
+
+
+/** Used for built-in method references. */
+var arrayProto = Array.prototype;
+
+/** Built-in value references. */
+var splice = arrayProto.splice;
+
+/**
+ * Removes `key` and its value from the list cache.
+ *
+ * @private
+ * @name delete
+ * @memberOf ListCache
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function listCacheDelete(key) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  if (index < 0) {
+    return false;
+  }
+  var lastIndex = data.length - 1;
+  if (index == lastIndex) {
+    data.pop();
+  } else {
+    splice.call(data, index, 1);
+  }
+  --this.size;
+  return true;
+}
+
+return listCacheDelete;
+
+}());
+
+
+/**
+ * Gets the list cache value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf ListCache
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function listCacheGet(key) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  return index < 0 ? undefined : data[index][1];
+}
+
+
+
+
+/**
+ * Checks if a list cache value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf ListCache
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function listCacheHas(key) {
+  return assocIndexOf(this.__data__, key) > -1;
+}
+
+
+
+
+/**
+ * Sets the list cache `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf ListCache
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the list cache instance.
+ */
+function listCacheSet(key, value) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  if (index < 0) {
+    ++this.size;
+    data.push([key, value]);
+  } else {
+    data[index][1] = value;
+  }
+  return this;
+}
+
+
+var ListCache = (function(){
+
+
+/**
+ * Creates an list cache object.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function ListCache(entries) {
+  var index = -1,
+      length = entries == null ? 0 : entries.length;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+// Add methods to `ListCache`.
+ListCache.prototype.clear = listCacheClear;
+ListCache.prototype['delete'] = listCacheDelete;
+ListCache.prototype.get = listCacheGet;
+ListCache.prototype.has = listCacheHas;
+ListCache.prototype.set = listCacheSet;
+
+return ListCache;
+
+}());
+
+
+/* Built-in method references that are verified to be native. */
+var Map = getNative(root, 'Map');
+
+
+
+
+/**
+ * Removes all key-value entries from the map.
+ *
+ * @private
+ * @name clear
+ * @memberOf MapCache
+ */
+function mapCacheClear() {
+  this.size = 0;
+  this.__data__ = {
+    'hash': new Hash,
+    'map': new (Map || ListCache),
+    'string': new Hash
+  };
+}
+
+
+/**
+ * Checks if `value` is suitable for use as unique object key.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is suitable, else `false`.
+ */
+function isKeyable(value) {
+  var type = typeof value;
+  return (type == 'string' || type == 'number' || type == 'symbol' || type == 'boolean')
+    ? (value !== '__proto__')
+    : (value === null);
+}
+
+
+
+
+/**
+ * Gets the data for `map`.
+ *
+ * @private
+ * @param {Object} map The map to query.
+ * @param {string} key The reference key.
+ * @returns {*} Returns the map data.
+ */
+function getMapData(map, key) {
+  var data = map.__data__;
+  return isKeyable(key)
+    ? data[typeof key == 'string' ? 'string' : 'hash']
+    : data.map;
+}
+
+
+
+
+/**
+ * Removes `key` and its value from the map.
+ *
+ * @private
+ * @name delete
+ * @memberOf MapCache
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function mapCacheDelete(key) {
+  var result = getMapData(this, key)['delete'](key);
+  this.size -= result ? 1 : 0;
+  return result;
+}
+
+
+
+
+/**
+ * Gets the map value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf MapCache
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function mapCacheGet(key) {
+  return getMapData(this, key).get(key);
+}
+
+
+
+
+/**
+ * Checks if a map value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf MapCache
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function mapCacheHas(key) {
+  return getMapData(this, key).has(key);
+}
+
+
+
+
+/**
+ * Sets the map `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf MapCache
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the map cache instance.
+ */
+function mapCacheSet(key, value) {
+  var data = getMapData(this, key),
+      size = data.size;
+
+  data.set(key, value);
+  this.size += data.size == size ? 0 : 1;
+  return this;
+}
+
+
+var MapCache = (function(){
+
+
+/**
+ * Creates a map cache object to store key-value pairs.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function MapCache(entries) {
+  var index = -1,
+      length = entries == null ? 0 : entries.length;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+// Add methods to `MapCache`.
+MapCache.prototype.clear = mapCacheClear;
+MapCache.prototype['delete'] = mapCacheDelete;
+MapCache.prototype.get = mapCacheGet;
+MapCache.prototype.has = mapCacheHas;
+MapCache.prototype.set = mapCacheSet;
+
+return MapCache;
+
+}());
+var setCacheAdd = (function(){
+/** Used to stand-in for `undefined` hash values. */
+var HASH_UNDEFINED = '__lodash_hash_undefined__';
+
+/**
+ * Adds `value` to the array cache.
+ *
+ * @private
+ * @name add
+ * @memberOf SetCache
+ * @alias push
+ * @param {*} value The value to cache.
+ * @returns {Object} Returns the cache instance.
+ */
+function setCacheAdd(value) {
+  this.__data__.set(value, HASH_UNDEFINED);
+  return this;
+}
+
+return setCacheAdd;
+
+}());
+/**
+ * Checks if `value` is in the array cache.
+ *
+ * @private
+ * @name has
+ * @memberOf SetCache
+ * @param {*} value The value to search for.
+ * @returns {number} Returns `true` if `value` is found, else `false`.
+ */
+function setCacheHas(value) {
+  return this.__data__.has(value);
+}
+
+
+var SetCache = (function(){
+
+
+/**
+ *
+ * Creates an array cache object to store unique values.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [values] The values to cache.
+ */
+function SetCache(values) {
+  var index = -1,
+      length = values == null ? 0 : values.length;
+
+  this.__data__ = new MapCache;
+  while (++index < length) {
+    this.add(values[index]);
+  }
+}
+
+// Add methods to `SetCache`.
+SetCache.prototype.add = SetCache.prototype.push = setCacheAdd;
+SetCache.prototype.has = setCacheHas;
+
+return SetCache;
+
+}());
+/**
+ * The base implementation of `_.findIndex` and `_.findLastIndex` without
+ * support for iteratee shorthands.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {Function} predicate The function invoked per iteration.
+ * @param {number} fromIndex The index to search from.
+ * @param {boolean} [fromRight] Specify iterating from right to left.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function baseFindIndex(array, predicate, fromIndex, fromRight) {
+  var length = array.length,
+      index = fromIndex + (fromRight ? 1 : -1);
+
+  while ((fromRight ? index-- : ++index < length)) {
+    if (predicate(array[index], index, array)) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+
+/**
+ * The base implementation of `_.isNaN` without support for number objects.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is `NaN`, else `false`.
+ */
+function baseIsNaN(value) {
+  return value !== value;
+}
+
+
+/**
+ * A specialized version of `_.indexOf` which performs strict equality
+ * comparisons of values, i.e. `===`.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {*} value The value to search for.
+ * @param {number} fromIndex The index to search from.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function strictIndexOf(array, value, fromIndex) {
+  var index = fromIndex - 1,
+      length = array.length;
+
+  while (++index < length) {
+    if (array[index] === value) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+
+
+
+/**
+ * The base implementation of `_.indexOf` without `fromIndex` bounds checks.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {*} value The value to search for.
+ * @param {number} fromIndex The index to search from.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function baseIndexOf(array, value, fromIndex) {
+  return value === value
+    ? strictIndexOf(array, value, fromIndex)
+    : baseFindIndex(array, baseIsNaN, fromIndex);
+}
+
+
+
+
+/**
+ * A specialized version of `_.includes` for arrays without support for
+ * specifying an index to search from.
+ *
+ * @private
+ * @param {Array} [array] The array to inspect.
+ * @param {*} target The value to search for.
+ * @returns {boolean} Returns `true` if `target` is found, else `false`.
+ */
+function arrayIncludes(array, value) {
+  var length = array == null ? 0 : array.length;
+  return !!length && baseIndexOf(array, value, 0) > -1;
+}
+
+
+/**
+ * This function is like `arrayIncludes` except that it accepts a comparator.
+ *
+ * @private
+ * @param {Array} [array] The array to inspect.
+ * @param {*} target The value to search for.
+ * @param {Function} comparator The comparator invoked per element.
+ * @returns {boolean} Returns `true` if `target` is found, else `false`.
+ */
+function arrayIncludesWith(array, value, comparator) {
+  var index = -1,
+      length = array == null ? 0 : array.length;
+
+  while (++index < length) {
+    if (comparator(value, array[index])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
+/**
+ * Checks if a `cache` value for `key` exists.
+ *
+ * @private
+ * @param {Object} cache The cache to query.
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function cacheHas(cache, key) {
+  return cache.has(key);
+}
+
+
+
+
+/* Built-in method references that are verified to be native. */
+var Set = getNative(root, 'Set');
+
+
+/**
+ * This method returns `undefined`.
+ *
+ * @static
+ * @memberOf _
+ * @since 2.3.0
+ * @category Util
+ * @example
+ *
+ * _.times(2, _.noop);
+ * // => [undefined, undefined]
+ */
+function noop() {
+  // No operation performed.
+}
+
+
+/**
+ * Converts `set` to an array of its values.
+ *
+ * @private
+ * @param {Object} set The set to convert.
+ * @returns {Array} Returns the values.
+ */
+function setToArray(set) {
+  var index = -1,
+      result = Array(set.size);
+
+  set.forEach(function(value) {
+    result[++index] = value;
+  });
+  return result;
+}
+
+
+var createSet = (function(){
+
+
+/** Used as references for various `Number` constants. */
+var INFINITY = 1 / 0;
+
+/**
+ * Creates a set object of `values`.
+ *
+ * @private
+ * @param {Array} values The values to add to the set.
+ * @returns {Object} Returns the new set.
+ */
+var createSet = !(Set && (1 / setToArray(new Set([,-0]))[1]) == INFINITY) ? noop : function(values) {
+  return new Set(values);
+};
+
+return createSet;
+
+}());
+var baseUniq = (function(){
+
+
+/** Used as the size to enable large array optimizations. */
+var LARGE_ARRAY_SIZE = 200;
+
+/**
+ * The base implementation of `_.uniqBy` without support for iteratee shorthands.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {Function} [iteratee] The iteratee invoked per element.
+ * @param {Function} [comparator] The comparator invoked per element.
+ * @returns {Array} Returns the new duplicate free array.
+ */
+function baseUniq(array, iteratee, comparator) {
+  var index = -1,
+      includes = arrayIncludes,
+      length = array.length,
+      isCommon = true,
+      result = [],
+      seen = result;
+
+  if (comparator) {
+    isCommon = false;
+    includes = arrayIncludesWith;
+  }
+  else if (length >= LARGE_ARRAY_SIZE) {
+    var set = iteratee ? null : createSet(array);
+    if (set) {
+      return setToArray(set);
+    }
+    isCommon = false;
+    includes = cacheHas;
+    seen = new SetCache;
+  }
+  else {
+    seen = iteratee ? [] : result;
+  }
+  outer:
+  while (++index < length) {
+    var value = array[index],
+        computed = iteratee ? iteratee(value) : value;
+
+    value = (comparator || value !== 0) ? value : 0;
+    if (isCommon && computed === computed) {
+      var seenIndex = seen.length;
+      while (seenIndex--) {
+        if (seen[seenIndex] === computed) {
+          continue outer;
+        }
+      }
+      if (iteratee) {
+        seen.push(computed);
+      }
+      result.push(value);
+    }
+    else if (!includes(seen, computed, comparator)) {
+      if (seen !== result) {
+        seen.push(computed);
+      }
+      result.push(value);
+    }
+  }
+  return result;
+}
+
+return baseUniq;
+
+}());
+
+
+/**
+ * Creates a duplicate-free version of an array, using
+ * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+ * for equality comparisons, in which only the first occurrence of each element
+ * is kept. The order of result values is determined by the order they occur
+ * in the array.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Array
+ * @param {Array} array The array to inspect.
+ * @returns {Array} Returns the new duplicate free array.
+ * @example
+ *
+ * _.uniq([2, 1, 2]);
+ * // => [2, 1]
+ */
+function uniq(array) {
+  return (array && array.length) ? baseUniq(array) : [];
+}
+
+
+var bundle_1LX = {};
+bundle_1LX['uniq'] = uniq;
+
+
+return bundle_1LX;
+
+}());/* BUNDLE END 1LX */
+
+
+
+Base.$extend({
+
+    $class: "plugin.bundle.FileProcessor",
+    host: null,
+
+    $constructor: function() {
+        this.$super(arguments);
+    },
+
+    $init: function(host) {
+        this.host = host;
+        this.bsStack = [];
+    },
+
+    $afterHostInit: function() {
+        var self = this;
+        self.host.on("process-file", self.processFileReqs, self);
+        self.host.on("process-file", self.replaceFile, self);
+        self.host.on("process-file", self.omitFile, self);
+    },
+
+    processFileReqs: function(file, bundle) {
+
+        if (file && file instanceof File) {
+            var self = this;
+
+            self.bsStack.push(file.path);
+
+            if (self.bsStack.length > 50) {
+                console.log(self.bsStack);
+                throw "Recursive requirement";
+            }
+
+            file.processReqs();
+            file.getImports().forEach(function(imp){
+                if (imp.isFile()) {
+                    bundle.addFile(imp.file);
+                }
+                var code = file.getCurrentContent();
+                imp.names.forEach(function(name){
+                    var reg = new RegExp('[^a-zA-Z0-9]'+name+'[^a-zA-Z0-9]');
+                    if (!code.match(reg)) {
+                        console.log("Unused requirement " + name + " in " + file.path);
+                    }
+                });
+            });
+
+            self.bsStack.pop();
+        }
+
+        return file;
+    },
+
+    replaceFile: function(file, bundle) {
+
+        if (file && file instanceof File) {
+            var replace = bundle.allReplaces;
+            while (replace[file.path]) {
+                file = File.get(replace[file.path]);
+            }
+        }
+
+        return file;
+    },
+
+    omitFile: function(file, bundle) {
+
+        if (file && file instanceof File) {
+            var omit = bundle.allOmits;
+            if (omit[file.path]) {
+                return null;
+            }
+        }
+
+        return file;
+    }
+
+});
+
+
+Base.$extend({
+
+    $class: "plugin.bundle.NpmProcessor",
+    host: null,
+
+    $init: function(host) {
+        this.host = host;
+    },
+
+    $afterHostInit: function() {
+        var self = this;
+        self.host.on("process-file", self.processNpmEntry, self);
+    },
+
+    processNpmEntry: function(file, bundle) {
+
+        if (file && file instanceof File) {
+
+            var info = file.getFileInfo();
+
+            if (!info.npm) {
+                return file;
+            }
+
+            var Bundle = ns.get("Bundle");
+            var npmBundle = Bundle.get(info.npm.module, "npm");
+
+            // avoid infinite recursion
+            if (npmBundle === bundle) {
+                return file;
+            }
+
+            if (!npmBundle.getOption("version")) {
+                npmBundle.setOption("module", info.npm.module);
+                npmBundle.setOption("version", info.npm.version);
+                npmBundle.setOption("wrap", true);
+            }
+
+            if (npmBundle.getOption("version") != info.npm.version) {
+                throw "Got two different versions of " + info.npm.module + " module: " +
+                    npmBundle.getOption("version") + " != " + info.npm.version;
+            }
+
+            npmBundle.addFile(file);
+
+            return npmBundle;
+        }
+        
+        return file;
+    }
+});
+
+
+
+Base.$extend({
+
+    $class: "plugin.bundle.Names",
+    host: null,
+
+    $init: function(host) {
+        this.host = host;
+    },
+
+    $afterHostInit: function() {
+        var self = this;
+        self.host.on("prepare-module-names", self.prepareModuleNames, self);
+        self.host.on("prepare-file-names", self.prepareFileNames, self);
+    },
+
+    prepareModuleNames: function(bundle) {
+
+        // iterate through all module imports collected from all files
+        bundle.imports.forEach(function(imp) {
+
+            var firstGlobal;
+
+            imp.names = imp.names.slice().filter(function(name) {
+
+                var used = false;
+
+                // if name hasn't been used
+                // everything is ok
+                if (!bundle.globals.hasOwnProperty(name)) {
+                    bundle.globals[name] = imp.module;
+                    !firstGlobal && (firstGlobal = name);
+                }
+                else {
+                    used = true;
+                }
+
+                imp.in.forEach(function(file) {
+                    var local = file.getImport(imp);
+
+                    if (!used) {
+                        // name goes to globals,
+                        // so we remove it from file's 
+                        // import record, and if there is no more names,
+                        // skip local import at all
+                        local.removeName(name);
+                        if (local.names.length === 0) {
+                            local.setSkipped(true);
+                        }
+                    }
+                    else {
+                        // the name is conflicting with others.
+                        // if by that time we don't have one global name,
+                        // we use import id.
+                        !firstGlobal && (firstGlobal = imp.id);
+                        imp.addName(firstGlobal);
+                        bundle.globals[firstGlobal] = true;
+
+                        // then we wrap the file 
+                        // and use the name locally,
+                        // assigning it from gloval var file.setOption("wrap", true);
+                        local.setNameFrom(name, firstGlobal);
+                    }
+                });
+
+                // remove conflicting names from bundle's import list
+                return !used;
+            }); 
+        });
+    },
+
+
+    prepareFileNames: function(bundle) {
+
+        // iterate over files on top level
+        bundle.buildList.forEach(function(file) {
+            if (file instanceof File) {
+
+                file.getParents().forEach(function(imp) {
+
+                    var firstGlobal;
+
+                    imp.names = imp.names.slice().filter(function(name) {
+
+                        var used = false;
+
+                        // if name hasn't been used
+                        // everything is ok
+                        if (!bundle.globals.hasOwnProperty(name) ||
+                            bundle.globals[name] == file.path) {
+                                
+                            bundle.globals[name] = file.path;
+                            !firstGlobal && (firstGlobal = name);
+                            file.setOption("as", name);   
+                        }
+                        else {
+                            used = true;
+                            // the name is conflicting with others.
+                            // if by that time we don't have one global name,
+                            // we use import id.
+                            !firstGlobal && (firstGlobal = file.id);
+                            bundle.globals[firstGlobal] = true;
+                            file.setOption("as", firstGlobal);
+                        }
+
+                        // if this file is imported from outside
+                        // current bundle; or global name is taken
+                        if (!file.bundle.hasFile(imp.file) || used) {
+
+                            imp.file.setOption("wrap", true);
+                            var local = imp.file.getImport({file: file});
+                            if (local) {
+                                local.setNameFrom(
+                                    name, 
+                                    [file.bundle.getUniqueName(), firstGlobal]);
+                            }
+                        }
+
+                        return !used;
+                    });
+
+                    if (imp.names.indexOf(firstGlobal) === -1) {
+                        imp.names.push(firstGlobal);
+                    }
+                });
+            }
+        });
+    }
+});
+
+
+
+/**
+ * Resolve list of files using path pattern. Uses <code>glob</code> internally.
+ * @param {string} pattern 
+ * @param {string} ext 
+ * @returns {array}
+ */
+var getFileList = function(pattern, ext) {
+    if (ext && pattern.indexOf("."+ext) != pattern.length - ext.length - 1) {
+        pattern += '/*.' + ext;
+    }
+
+    return glob.sync(pattern);
+};
+
+
+
+/*module.exports = function(directory, ext) {
+
+    var fileList,
+        filePath,
+        levels = 0,
+        files = [];
+
+    if (!directory) {
+        return [];
+    }
+
+
+    if (directory.substr(directory.length - 1) == "*") {
+        levels++;
+    }
+    if (directory.substr(directory.length - 2) == "**") {
+        levels++;
+    }
+
+    if (levels) {
+        directory = directory.substr(0, directory.length - (levels + 1));
+    }
+    directory = path.normalize(directory);
+
+    var readDir = function(dir) {
+        fileList    = fs.readdirSync(dir);
+
+        fileList.forEach(function(filename) {
+            filePath = path.normalize(dir + "/" + filename);
+
+            if (isFile(filePath)) {
+
+                if (!ext) {
+                    files.push(filePath);
+                }
+                else if (typeof ext == "string" && path.extname(filePath).substr(1) == ext) {
+                    files.push(filePath);
+                }
+                else if (typeof ext != "string" && path.extname(filePath).substr(1).match(ext)) {
+                    files.push(filePath);
+                }
+            }
+            else if (isDir(filePath) && levels > 1) {
+                readDir(filePath);
+            }
+        });
+    };
+
+    if (levels > 0 || isDir(directory)) {
+        readDir(directory);
+    }
+    else {
+        files    = [directory];
+    }
+
+    return files;
+};*/
+
+
+
+
+/**
+ * metaphorjs.json wrapper
+ * @class Config
+ */
+var Config = function(){
+
+    var defaults = {
+        mixin: {},
+        build: {},
+        docs: {}
+    };
+
+    var all = {};
+
+    var Config = Base.$extend({
+
+        /**
+         * @type {string}
+         */
+        path: null,
+
+        /**
+         * @type {string}
+         */
+        base: null,
+
+        /**
+         * @constructor
+         * @param {string} jsonFilePath 
+         */
+        $init: function(jsonFilePath) {
+
+            var self    = this;
+    
+            self.path   = path.normalize(jsonFilePath);
+            self.base   = path.dirname(self.path) + '/';
+    
+            var json    = require(self.path),
+                key;
+    
+            for (key in defaults) {
+                self[key] = defaults[key];
+            }
+    
+            for (key in json) {
+                self[key] = json[key];
+            }
+        }
+    }, {
+
+        /**
+         * Get wrapped metaphorjs.json by file path
+         * @static
+         * @method
+         * @param {string} filePath 
+         */
+        get: function(filePath) {
+            filePath = path.normalize(filePath);
+            if (!all[filePath]) {
+                all[filePath] = new Config(filePath);
+            }
+            return all[filePath];
+        },
+
+        /**
+         * Get wrapped metaphorjs.json by current directory
+         * @static
+         * @method
+         */
+        getCurrent: function() {
+            var cwd = process.cwd(),
+                file = cwd + "/metaphorjs.json";
+
+            if (fs.existsSync(file)) {
+                return Config.get(file);
+            }
+
+            return null;
+        }
+    });
+
+
+    return Config;
+
+}();
+
+
+/**
+ * @mixin mixin.Collector
+ */
+ns.register("mixin.Collector", {
+
+    $beforeInit: function() {
+        this.allOmits = {};
+        this.allReplaces = {};
+        this.collected = {};
+    },
+
+    $afterInit: function() {
+        // return first === false result and skip the rest of listeners
+        this.$$observable.createEvent("collect-filter", false);
+    },
+    
+    
+
+
+    _processMixin: function(mixin, config) {
+
+        var self    = this,
+            files   = mixin.files || [],
+            omit    = mixin.omit || [],
+            replace = mixin.replace || [],
+            base    = config.base;
+
+        omit.forEach(function(omitFile){
+            getFileList(resolvePath(omitFile, [base]), "js")
+                .forEach(function(omitFile){
+                    self.allOmits[omitFile] = true;
+                });
+        });
+
+        replace.forEach(function(row){
+            self.allReplaces[resolvePath(row[0], [base])] = 
+                                resolvePath(row[1], [base]);
+        });
+
+        files.forEach(function(file){
+            self._processFileItem(file, config);
+        });
+    },
+
+    _processFileItem: function(fileDef, config){
+
+        if (typeof fileDef === "string") {
+            fileDef = [fileDef];
+        }
+
+        var self    = this,
+            file    = fileDef[0],
+            json;
+
+        // local mixin: simple name and nothing else: ["name"]
+        if (file.match(/^[a-z0-9]+$/i)) {
+
+            if (!config.mixin[file]) {
+                throw "Mixin "+file+" not found in " + config.path;
+            }
+
+            self._processMixin(config.mixin[file], config);
+        }
+
+        // external mixin: [path/to/json, "name"]
+        else if (path.extname(file) === ".json") {
+            
+            json = Config.get(resolvePath(file));
+
+            if (!json) {
+                throw "Json file not found: " + file;
+            }
+            if (!json.mixin[fileDef[1]]) {
+                throw "Mixin "+fileDef[1]+" not found in " + json.path;
+            }
+
+            self._processMixin(json.mixin[fileDef[1]], json);
+        }
+        else {
+            getFileList(resolvePath(file, [config.base]), "js")
+                .forEach(function(file){
+                    var f = File.get(file, fileDef[1]);
+                    f.setOption("base", config.base);
+
+                    var res = self.trigger("collect-filter", f, self);
+                    if (res !== false) {
+                        self.collected[f.path] = f;
+                    }
+                });
+        }
+    },
+});
+var Bundle = (function(){
+
+
+var uniq = bundle_1LX.uniq;
+
+
+
+
+
+
+
+
+
+var all = {};
+
+/**
+ * @class Bundle
+ */
+
+var Bundle = Base.$extend({
+    $class: "Bundle",
+    $mixins: ["mixin.WithImports", 
+                "mixin.Collector"],
+
+    id: null,
+    name: null,
+    type: null,
+    top: false,
+    parent: null,
+
+    $constructor: function() {
+        this.$plugins.push("plugin.bundle.FileProcessor");
+        this.$plugins.push("plugin.bundle.NpmProcessor");
+        this.$plugins.push("plugin.bundle.Names");
+        this.$plugins.push("plugin.code.Generator");
+
+        this.$super(arguments);
+    },
+
+    /**
+     * @constructor
+     * @param {string} name
+     * @param {string} type
+     */
+    $init: function(name, type) {
+
+        var self = this;
+
+        self.$super();
+
+        self.$$observable.createEvent("process-file", "pipe");  
+
+        self.id = nextUid();
+        self.name = name;
+        self.type = type;
+        self.buildList = [];
+        self.included = {};
+        self.globals = {};
+
+        self.on("set_expose", self._setArrayOption, self);
+        self.trigger("init", self);
+    },
+
+    /**
+     * Set current bundle
+     * @method
+     * @param {Bundle} bundle
+     */
+    setBundle: function(bundle) {
+        this.parent = bundle;
+    },
+
+    /**
+     * Collect files as defined in json file
+     * @method
+     * @param {Config} config
+     * @param {string} name Build name
+     */
+    collect: function(config, name) {
+
+        var self        = this,
+            mixin       = config.build[name] || config.mixin[name];
+
+        if (!mixin) {
+            throw mixin + " not found in " + config.path;
+        }
+
+        if (mixin.options) {
+            self.setOptions(mixin.options);
+        }
+
+        self._processMixin(mixin, config);
+
+        var replacement;
+        for (var path in self.collected) {
+            while (self.allReplaces[path]) {
+                replacement = File.get(self.allReplaces[path]);
+                self.collected[replacement.path] = replacement;
+                delete self.collected[path];
+                path = replacement.path;
+            }
+        }
+
+        for (path in self.allOmits) {
+            if (self.collected[path]) {
+                delete self.collected[path];
+            }
+        }
+
+        self.trigger("files-collected", self);
+    },
+
+    /**
+     * Resolve all required files, collect inner bundles
+     * @method
+     */
+    prepareBuildList: function() {
+
+        var self = this;
+
+        for (var path in self.collected) {
+            self.addFile(self.collected[path]);
+        }
+
+        // hoist all module reqs
+        // top level only
+        self.getImports("module", true, true).forEach(self.addImport, self);
+        self.trigger("imports-hoisted", self);
+        self.trigger("prepare-module-names", self);
+        self.trigger("prepare-file-names", self);
+        self.eachBundle(function(b){
+            b.trigger("prepare-file-names", b);
+        });
+
+        // make inner bundles expose some of its imports
+        self.eachFile(function(file) {
+            var b = file.bundle;
+            if (!b.top) {
+                file.getParents().forEach(function(imp) {
+                    if (!b.hasFile(imp.file)) {
+                        b.setOption("expose", imp.names);
+                    }
+                });
+            }
+        });
+
+        self.trigger("build-list-ready", self);
+    },
+
+    /**
+     * Add already processed file to the build list
+     * @method
+     * @param {File} file
+     */
+    addFile: function(file) {
+        var self = this;
+        if (!self.included[file.id]) {
+            file = self.trigger("process-file", file, self);
+            if (file && !self.included[file.id]) {
+                self.included[file.id] = true;
+                self.buildList.push(file);
+                file.setBundle(self);
+            }
+        }
+    },
+
+    /**
+     * @ignore
+     */
+    toString: function() {
+        return this.getContent();
+    },
+
+    /**
+     * Checks if this bundle can't be included to global scope
+     * without wrapping it first
+     * @method
+     * @returns {bool}
+     */
+    needsWrapping: function() {
+        return this.top === false;
+    },
+
+    getUniqueName: function() {
+        return "bundle_" + this.id;
+    },
+
+    hasGlobalVar: function(name) {
+        return this.globals.hasOwnProperty(name);
+    },
+
+    getGlobalVarOrigin: function(name){
+        return this.globals[name];
+    },
+
+
+    /**
+     * Get concatenated content
+     * @method
+     * @returns {string}
+     */
+    getContent: function() {
+        var self = this,
+            code = "",
+            expose = self.getOption("expose"),
+            exports = self.getOption("exports"),
+            exposeName = self.getOption("exposeIn", self.getUniqueName());
+
+        code += '/* BUNDLE START ' + self.id + ' */';
+        code += self.trigger("code-module-imports", self).join("\n");
+        code += this.buildList.join("\n");
+
+        if (expose) {
+            code = self.trigger("code-expose", code, exposeName, expose);
+        }
+
+        if (self.needsWrapping()) {
+            if (expose) {
+                code = self.trigger("code-return", code, exposeName);
+            }
+            code = self.trigger("code-wrap", code);
+            code = self.trigger("code-prepend-var", code, self.getUniqueName());
+        }
+
+        if (exports) {
+            code += self.trigger("code-export", exposeName);
+        }
+        
+        code += '/* BUNDLE END ' + self.id + ' */';
+
+        return code;
+    },
+
+    /**
+     * Iterate over all files in this bundle and sub-bundles
+     * @param {function} fn
+     * @param {object} context 
+     */
+    eachFile: function(fn, context) {
+        var self = this;
+        self.buildList.forEach(function(entry){
+            if (entry instanceof File) {
+                fn.call(context, entry);
+            }
+            else {
+                entry.eachFile(fn, context);
+            }
+        });
+    },
+
+    /**
+     * Iterate over all sub bundles
+     * @param {function} fn
+     * @param {object} context 
+     */
+    eachBundle: function(fn, context) {
+        var self = this;
+        self.buildList.forEach(function(entry){
+            if (entry instanceof Bundle) {
+                fn.call(context, entry);
+                entry.eachBundle(fn, context);
+            }
+        });
+    },
+
+    /**
+     * @method
+     * @param {File} file
+     * @returns {bool}
+     */
+    hasFile: function(file) {
+        return this.buildList.indexOf(file) !== -1;
+    },
+
+    /**
+     * Get a list of files that import given module or file
+     * @method
+     * @param {object} def
+     * @param {string} name optional; name under which file is imported
+     * @returns {array}
+     */
+    whoImports: function(def, name) {
+        var self = this;
+        if (def.file) {
+            return def.file.getParents().filter(function(file) {
+                var imp = file.doesImport(def);
+                return imp ? (name ? imp.hasName(name) : true) : false;
+            });
+        }
+        else {
+            var list = [];
+            self.eachFile(function(file) {
+                var subd;
+                if (subd = file.doesImport(def)) {
+                    if (!name || subd.hasName(name)) {
+                        list.push(file);
+                    }
+                }
+            });
+            return list;
+        }
+    }
+}, 
+
+// Static methods
+{
+    get: function(name, type) {
+        var fullName = ""+type +"/" + name;
+        if (!all[fullName]) {
+            all[fullName] = new Bundle(name, type);
+        }
+
+        return all[fullName];
+    },
+
+    exists: function(name, type) {
+        return !!all[""+type +"/" + name];
+    }
+});
+
+
+return Bundle;
+}());
+
+
+
+var isFile = function(filePath) {
+    return fs.existsSync(filePath) && fs.lstatSync(filePath).isFile();
+};
+
+
+
+
+
+/**
+* @class Builder
+*/
+var Builder = Base.$extend({
+
+    /**
+     * @constructor
+     */
+    $init: function(buildName, projectFile) {
+
+        if (!isFile(projectFile) && 
+            !(projectFile instanceof Config)) {
+            throw projectFile + " not found";
+        }
+
+        var self            = this;
+
+        self.config         = projectFile instanceof Config ? projectFile : Config.get(projectFile);
+        self.projectFile    = projectFile instanceof Config ? projectFile.path : projectFile;
+        self.bundle         = Bundle.get(buildName, "build");
+        self.buildName      = buildName;
+
+        self.bundle.top     = true;
+
+        self.trigger("init", self);
+    },
+
+    /**
+     * Create build
+     * @method
+     */
+    build:          function() {
+
+        var self    = this,
+            target,
+            content;
+
+        self.trigger("before-build", self);
+
+        self.bundle.collect(self.config, self.buildName);
+        self.trigger("after-collect", self);
+
+        self.bundle.prepareBuildList();
+        self.trigger("after-build-list", self);
+
+        content     = self.bundle.getContent();
+        target      = self.config.build[self.buildName].target;
+        target      = path.resolve(self.config.base, target);
+
+        fs.writeFileSync(target, content);
+        self.trigger("build-written", self, target, content);
+    }
+});
+
+
+
+
+
+
+/**
+ * Build a bundle 
+ * @function build
+ * @param {string} name 
+ */
+var build = function(name) {
+
+    var config = Config.getCurrent(),
+        actions = [],
+        builds, 
+        i;
+
+    if (!config) {
+        throw "metaphorjs.json not found in current directory";
+    }
+
+    if (!name) {
+        builds      = config.build;
+
+        if (builds) {
+            for (i in builds) {
+                if (builds[i].auto) {
+                    actions.push(i);
+                }
+            }
+        }
+    }
+    else {
+        actions.push(name);
+    }
+
+    actions.forEach(function(name){
+        var builder     = new Builder(name, config);
+        builder.build();
+    });
+};
+
+
+
+/**
+ * @function
+ * @param {string} name 
+ */
+var compile = function(name) {
+
+    var config = Config.getCurrent();
+
+    if (!config) {
+        throw "metaphorjs.json not found in current directory!"
+    }
+    if (!action) {
+        throw "Must specify build. Or use mjs-compile --all";
+    }
+
+    var builder     = new Builder(name, config);
+
+    builder.build();
+    return builder.compile();
+};
 
 
 
@@ -5487,6 +6132,59 @@ function isThenable(any) {
     return isFunction((then = any.then)) ?
            then : false;
 };
+
+
+
+var error = (function(){
+
+    var listeners = [];
+
+    var error = function error(e) {
+
+        var i, l;
+
+        for (i = 0, l = listeners.length; i < l; i++) {
+            if (listeners[i][0].call(listeners[i][1], e) === false) {
+                return;
+            }
+        }
+
+        var stack = (e ? e.stack : null) || (new Error).stack;
+
+        if (typeof console != strUndef && console.error) {
+            //async(function(){
+                if (e) {
+                    console.error(e);
+                }
+                if (stack) {
+                    console.error(stack);
+                }
+            //});
+        }
+        else {
+            throw e;
+        }
+    };
+
+    error.on = function(fn, context) {
+        error.un(fn, context);
+        listeners.push([fn, context]);
+    };
+
+    error.un = function(fn, context) {
+        var i, l;
+        for (i = 0, l = listeners.length; i < l; i++) {
+            if (listeners[i][0] === fn && listeners[i][1] === context) {
+                listeners.splice(i, 1);
+                break;
+            }
+        }
+    };
+
+    return error;
+}());
+
+
 
 
 
@@ -6326,609 +7024,12 @@ var Promise = function(){
 
 
 
-var child           = require("child_process");
-
-
-
-var minify = require('html-minifier').minify;
-
-
-var Builder         = function(action, projectFile) {
-
-    if (!isFile(projectFile) && !(projectFile instanceof JsonFile)) {
-        throw projectFile + " not found";
-    }
-
-    var self            = this;
-
-    self.jsonFile       = projectFile instanceof JsonFile ? projectFile : JsonFile.get(projectFile);
-    self.projectFile    = projectFile instanceof JsonFile ? projectFile.path : projectFile;
-    self.bld            = new Build(self.jsonFile, action);
-
-};
-
-Builder.prototype   = {
-
-    /**
-     * @type JsonFile
-     */
-    jsonFile:       null,
-
-    /**
-     * @type Build
-     */
-    bld:            null,
-    projectFile:    null,
-
-    templates:      null,
-    gettersCode:    null,
-    gettersCodes:   null,
-
-    build:          function() {
-
-        var self    = this,
-            bld     = self.bld;
-
-        if (bld.templates) {
-            self.prepareTemplates();
-            //console.log(bld.templates)
-        }
-
-        if (bld.files.length && bld.target) {
-            self.concat();
-        }
-    },
-
-    prepareTemplates: function() {
-
-        var self = this,
-            scope = new Scope,
-            boundary = '##--##',
-            saveBoundary = '--##--',
-            filePath,
-            tplCfg,
-            fns = [],
-            codes = [],
-            tpls = {};
-
-
-        for (filePath in self.bld.templates) {
-
-            tplCfg = self.bld.templates[filePath];
-
-            var tpl = trim(fs.readFileSync(filePath, {encoding: "utf-8"})),
-                tplUrl;
-
-            if (!tpl) {
-                continue;
-            }
-
-            tpl = minify(tpl, {
-                collapseWhitespace: true,
-                collapseInlineTagWhitespace: true,
-                removeComments: false
-            });
-
-            tplUrl = filePath;
-
-            if (tplCfg.root) {
-                tplUrl = tplUrl.replace(tplCfg.root, "");
-            }
-            if (tplCfg.prefix) {
-                tplUrl = tplCfg.prefix + tplUrl;
-            }
-
-            //var tr = new TextRenderer(scope, tpl, null, null, null, boundary, "mock");
-
-            tpls[tplUrl] = tpl;
-
-            /*tr.watchers.forEach(function(w, inx){
-                var cfg = w.getConfig();
-                if (cfg.type === "expr" && !cfg.hasPipes && !cfg.hasInputPipes) {
-                    var nextInx = fns.length;
-                    fns.push(cfg.getter);
-                    codes.push(cfg.code);
-                    tpl = tr.processed.replace(
-                        boundary + inx + boundary,
-                        saveBoundary + nextInx + saveBoundary
-                    );
-                }
-                else {
-                    tpl = tr.processed.replace(
-                        boundary + inx + boundary,
-                        '{{ ' + cfg.code + ' }}'
-                    );
-                }
-
-                tpls[tplUrl] = tpl;
-            });*/
-        }
-
-        self.templates = tpls;
-        self.gettersCode = "[" + fns.join(", ") + "]";
-        self.gettersCodes = codes;
-    },
-
-    concat:        function() {
-
-        var self        = this,
-            bld         = self.bld,
-            target      = bld.specificTarget || path.normalize(self.jsonFile.base + bld.target),
-            content     = "",
-            exposeIn,
-            exposedNames= [],
-            file,
-            fileOpt;
-
-        console.log("Building " + path.basename(target));
-
-        if (isFile(target)) {
-            fs.unlinkSync(target);
-        }
-
-        if (bld.require) {
-            var rs = bld.require,
-                m;
-
-            for (m in rs) {
-                var req = rs[m];
-                if (typeof req === "string") {
-                    content += "var " + req + " = " + "require" + "('" + m + "');\n"
-                }
-                else {
-                    var reqStr = "var " + req.as + " = " + "require" + "('"+ m +"')";
-                    var argStr = req.args ? req.args.join(", ") : "";
-                    if (req.call) {
-                        if (req.call === true) {
-                            reqStr += "(" + argStr + ")";
-                        }
-                        else {
-                            reqStr += "." + req.call + "(" + argStr + ")";
-                        }
-                    }
-                    else if (argStr) {
-                        reqStr += "("+ argStr +")";
-                    }
-                    content += reqStr + ";\n";
-                }
-            }
-        }
-
-        if (bld.prepend) {
-            bld.prepend.forEach(function(file) {
-                var filePath = path.normalize(self.jsonFile.base + file);
-                content += fs.readFileSync(filePath).toString();
-                content += "\n";
-            });
-        }
-
-        content += "var __MetaphorJsPrebuilt = {};\n";
-
-        if (self.templates) {
-            content += "__MetaphorJsPrebuilt['__tpls'] = " + JSON.stringify(self.templates) + ";\n";
-            content += "__MetaphorJsPrebuilt['__tpl_getters'] = " + self.gettersCode + ";\n";
-            content += "__MetaphorJsPrebuilt['__tpl_getter_codes'] = " + JSON.stringify(self.gettersCodes) + ";\n";
-        }
-
-        bld.buildList.forEach(function(filePath){
-
-            if (!File.exists(filePath)) {
-                throw filePath + " was not resolved";
-            }
-
-            file = File.get(filePath);
-            fileOpt = bld.fileOptions[filePath];
-
-            content += file.getContent(fileOpt);
-            content += "\n";
-
-            if (fileOpt && fileOpt.temporary) {
-                fs.unlinkSync(file.path);
-            }
-        });
-
-        if (bld.expose) {
-
-            var createdNs = {},
-                es6export = bld.es6export || false,
-                exportContent = "";
-
-            exposeIn = bld.exposeIn || "MetaphorJsExports";
-            exportContent += "var " + exposeIn + " = {};\n";
-
-            if (bld.expose === "all") {
-                var names = self.collectNames();
-                names.forEach(function(name){
-                    if (bld.exposeSkip && bls.exposeSkip.indexOf(name) !== -1) {
-                        return;
-                    }
-                    if (name !== exposeIn) {
-                        exposedNames.push([name, name]);
-                        exportContent += exposeIn + "['" + name + "'] = " + name + ";\n";
-                    }
-                });
-            }
-            else {
-
-                var ns, as;
-
-                bld.expose.forEach(function (varName) {
-
-                    if (typeof varName === "string") {
-                        exposedNames.push([varName, varName]);
-                        exportContent += exposeIn + "['" + varName + "'] = " + varName + ";\n";
-                    }
-                    else {
-
-                        if (isArray(varName)) {
-                            ns = varName[0];
-                            as = varName[2] || varName[1];
-                            varName = varName[1];
-                        }
-                        else {
-                            ns = varName.ns || exposeIn;
-                            as = varName.as || varName.name;
-                            varName = varName.name;
-                        }
-
-                        if (!createdNs[ns]) {
-                            exportContent += ns + " || (" + ns + " = {});\n";
-                        }
-
-                        exposedNames.push([varName, as]);
-                        exportContent += ns + "['" + as + "'] = " + varName + ";\n";
-                    }
-                });
-            }
-
-            content += exportContent;
-        }
-
-        if (bld.append) {
-            bld.append.forEach(function(file) {
-                var filePath = path.normalize(self.jsonFile.base + file);
-                content += fs.readFileSync(filePath).toString();
-                content += "\n";
-            });
-        }
-
-        if (bld.global) {
-            content += "typeof global != \"undefined\" ? " +
-                       "(global['MetaphorJs'] = "+ exposeIn +") : (window['MetaphorJs'] = "+ exposeIn +");\n";
-        }
-
-        if (bld.exports) {
-            if (bld.exports === true) {
-                bld.exports = exposeIn;
-            }
-            if (bld.wrap) {
-                content += "return " + bld.exports + ";\n";
-            }
-            else {
-                content += "module"+ ".exports = " + bld.exports + ";\n";
-            }
-        }
-
-        if (bld.returns) {
-            if (bld.es6export) {
-                content += "return " + exposeIn + ";\n";
-            }
-            else {
-                content += "return " + bld.returns + ";\n";
-            }
-        }
-
-        if (bld.define) {
-            var defName = bld.define.name,
-                defDeps = bld.define.deps,
-                defRet  = bld.define.return,
-                start   = 'define("'+defName+'", ',
-                end     = "\n});\n",
-                deps    = [],
-                args    = [],
-                dep;
-
-            if (defDeps) {
-                for (dep in defDeps) {
-                    deps.push("'" + dep + "'");
-                    args.push(defDeps[dep]);
-                }
-                start   += '[' + deps.join(", ") + '], ';
-                start   += 'function(' + args.join(", ") + ') {' + "\n";
-            }
-            else {
-                start += "function() {\n";
-            }
-
-            if (defRet) {
-                end     = "\nreturn " + defRet + ";" + end;
-            }
-
-            content = start + content + end;
-            content += "\n";
-        }
-
-        content = File.removeDupReqs(content);
-
-        if (bld.wrap) {
-            var wrap        = bld.wrap;
-            if (typeof wrap !== "object") {
-                wrap = {};
-            }
-            var wrapArgs    = "";
-            if (wrap.args) {
-                wrapArgs =  wrap.args.join(", ");
-            }
-
-            var wrapName    = wrap.name || "";
-
-            var wrapStart   = wrap.start ||
-                                wrap.deferred ?
-                                    "function "+wrapName+"("+wrapArgs+") {\n\"use strict\";\n" :
-                                    "(function("+wrapArgs+"){\n\"use strict\";\n";
-
-            var wrapEnd     = wrap.end ||
-                                wrap.deferred ?
-                                    "\n};" :
-                                    "\n}("+wrapArgs+"));";
-
-            content         = wrapStart + content + wrapEnd;
-
-            if (bld.exports || wrap.exported) {
-                content = "module" + ".exports = " + content;
-            }
-            if (bld.es6export) {
-                content = "var " + exposeIn + " = " + content;
-            }
-
-            if (bld.shebang) {
-                content = bld.shebang + "\n" + content;
-            }
-        }
-
-        if (bld.es6export) {
-
-            exportContent = "";
-            exposeIn = bld.exposeIn || "MetaphorJsExports";
-            var es6exportList = [];
-
-            exposedNames.forEach(function (item) {
-                var as = item[1]; // key in exposedIn (this is all we care)
-                es6exportList.push(as);
-                content += "\nvar " + as + " = " + exposeIn + '.' + as + ';';
-            });
-
-            if (es6exportList.length > 0) {
-                content += "\n\nexport { " + es6exportList.join(", ") + " };\n";
-            }
-        }
-
-        fs.writeFileSync(target, content);
-
-        if (bld.chmod) {
-            fs.chmodSync(target, bld.chmod);
-        }
-    },
-
-
-
-    compile:        function(onFinish) {
-
-        var self        = this,
-            bld         = self.bld,
-            source      = path.normalize(self.jsonFile.base + bld.target),
-            target      = bld.compileTarget ?
-                            path.normalize(self.jsonFile.base + bld.compileTarget) :
-                            source.replace(/\.js$/, ".min.js"),
-            args        = [],
-            proc,
-            out;
-
-        if (isFile(target)) {
-            fs.unlinkSync(target);
-        }
-
-        console.log("Compiling " + path.basename(target));
-        out     = fs.createWriteStream(target);
-        args.push(source);
-
-        args.push('--language_in=ECMASCRIPT5_STRICT');
-
-        if (bld.compileAdvanced) {
-            args.push('--compilation_level=ADVANCED');
-        }
-
-        if (bld.compileSourceMap) {
-            args.push("--create_source_map=" + target + ".map");
-        }
-
-        //if (bld.Xmx) {
-            //args.push("--Xmx=" + bld.Xmx);
-        //}
-
-        var ccjs    = require.resolve("closurecompiler").replace("ClosureCompiler.js", "bin/ccjs");
-
-        proc    = child.spawn(ccjs, args);
-
-        proc.stderr.pipe(process.stderr);
-        proc.stdout.pipe(out);
-        proc.on("exit", function(code) {
-            if (onFinish) {
-                onFinish(code);
-            }
-            else {
-                process.exit(code);
-            }
-        });
-        proc.on("error", function(error) {
-            console.log(error);
-        });
-    },
-
-    collectNames: function() {
-
-        var self    = this,
-            bl      = self.bld.buildList,
-            names   = [],
-            uni     = {};
-
-        bl.forEach(function(path) {
-            var file = File.getOrCreate(path),
-                as  = file.as;
-
-            as.forEach(function(name) {
-                if (!uni[name]) {
-                    uni[name] = true;
-                    names.push(name);
-                }
-            });
-        });
-
-        return names;
-
-    }
-};
-
 
 
 /**
- * @param {function} fn
- */
-var eachBuild = function(fn) {
-
-    eachProject(function(project, projectFile){
-
-        var builds = project.build,
-            i;
-
-        if (builds) {
-            for (i in builds) {
-                fn(builds[i], projectFile, i);
-            }
-        }
-    });
-};
-
-
-Builder.build = function(action, projectFile) {
-
-    if (!projectFile) {
-        projectFile = process.cwd() + "/metaphorjs.json";
-    }
-
-    var actions = [];
-
-    if (!action) {
-        var project    = require(projectFile),
-            builds      = project.build;
-
-        if (builds) {
-            for (var i in builds) {
-                if (builds[i].auto) {
-                    actions.push(i);
-                }
-            }
-        }
-    }
-    else {
-        actions.push(action);
-    }
-
-    actions.forEach(function(action){
-        var builder     = new Builder(action, projectFile);
-        builder.build();
-
-    });
-};
-
-Builder.buildAll = function(auto) {
-
-    var b;
-
-    eachBuild(function(build, projectFile, buildName){
-        if (!auto || build.auto) {
-            b = new Builder(buildName, projectFile);
-            b.build();
-        }
-    });
-
-};
-
-
-Builder.compile = function(action, projectFile) {
-
-    if (!projectFile) {
-        projectFile = process.cwd() + "/metaphorjs.json";
-    }
-    if (!action) {
-        throw "Must specify build. Or use mjs-compile --all";
-    }
-
-    var deferred    = new Promise;
-
-    var builder     = new Builder(action, projectFile);
-    builder.build();
-    builder.compile(function(){
-        deferred.resolve();
-    });
-
-    return deferred;
-};
-
-
-Builder.compileAll = function(noExit, noBuild) {
-
-    var b,
-        builds      = [],
-        deferred    = new Promise,
-        item,
-        next        = function(code) {
-
-            if (code !== 0) {
-                deferred.reject(item[1] + " failed compiling with code " + code);
-                if (!noExit) {
-                    process.exit(code);
-                }
-                return;
-            }
-
-            item = builds.shift();
-
-            if (!item) {
-                deferred.resolve();
-                if (!noExit) {
-                    process.exit(0);
-                }
-                return;
-            }
-
-            b = new Builder(item[0], item[1]);
-            if (!noBuild) {
-                b.build();
-            }
-            b.compile(next);
-        };
-
-    eachBuild(function(project, projectFile, buildName){
-        if (project.compile !== false) {
-            builds.push([buildName, projectFile]);
-        }
-    });
-
-    next(0);
-
-    return deferred;
-};
-
-
-
-
-
-var cp = require("child_process");
-
-/**
- * @param cmd
- * @param args
+ * @function
+ * @param {string} cmd
+ * @param {string} args
  * @returns {Promise}
  */
 var passthru = function(cmd, args) {
@@ -6956,445 +7057,13 @@ var passthru = function(cmd, args) {
 
     return deferred;
 };
-
-
-
-var Git = function(location) {
-
-    var self = this;
-
-    self.location = location;
-
-};
-
-Git.prototype = {
-
-    location: null,
-
-    hasChanges: function(wholeProject) {
-
-        var deferred = new Promise,
-            loc = this.location,
-            check = wholeProject ?
-                        (".") :
-                        (isDir(loc + "/src") ? "./src" : ".");
-
-        process.chdir(loc);
-
-        cp.execFile("git", ["status", check], function(err, stdout) {
-            if (err) {
-                deferred.reject(err);
-            }
-            else {
-                deferred.resolve(stdout.indexOf("modified:") != -1 || stdout.indexOf("Untracked files:") != -1);
-            }
-        });
-
-        return deferred;
-    },
-
-    addAll: function() {
-        process.chdir(this.location);
-        return passthru("git", ["add", "-A", "."]);
-    },
-
-    commit: function(message) {
-        process.chdir(this.location);
-        return passthru("git", ["commit", "-m", message]);
-    },
-
-    setTag: function(version) {
-        process.chdir(this.location);
-        return passthru("git", ["tag", version]);
-    },
-
-    push: function(remote, branch) {
-        process.chdir(this.location);
-        return passthru("git", ["push", remote, branch]);
-    }
-
-};
-
-
-
-var parseArgs = require("minimist");
-
-
-
-
-var Project = function(){
-
-
-
-    var increaseVersion = function(version, mod) {
-        version = version.split(".");
-
-        if (version.length == 2) {
-            version.push("0");
-        }
-        else {
-            version[2] = ""+(parseInt(version[2], 10) + mod);
-        }
-        return version.join(".");
-    };
-
-    var Project = function(location) {
-
-        var self = this;
-
-        self.location   = location;
-        self.name       = path.basename(location);
-        self.git        = new Git(location);
-        self.config     = require(location + "/metaphorjs.json");
-        self.hasNpm     = isFile(location + "/package.json") && self.config.npm !== false;
-        self.hasBower   = isFile(location + "/bower.json");
-
-        self.npmJson    = self.hasNpm ? require(location + "/package.json") : null;
-        self.bowerJson  = self.hasBower ? require(location + "/bower.json") : null;
-    };
-
-    Project.prototype = {
-
-        location: null,
-        name: null,
-        git: null,
-        hasNpm: false,
-        hasBower: false,
-        config: null,
-
-        test: function() {
-
-            var self        = this,
-                test        = self.config.test,
-                tests       = [],
-                promise     = new Promise,
-
-                next        = function() {
-                    var test = tests.shift();
-                    if (test) {
-                        process.chdir(self.location);
-
-                        var runTest = function() {
-                            passthru(test.cmd, test.args || []).then(next, next);
-                        };
-
-                        runTest();
-
-                    }
-                    else {
-                        promise.resolve();
-                    }
-                };
-
-            if (test) {
-
-                console.log("Testing " + path.basename(self.location));
-
-                if (test.cmd) {
-                    tests = [test];
-                }
-                else {
-                    tests = test;
-                }
-
-                next();
-            }
-            else {
-                promise.resolve();
-            }
-
-            return promise;
-        },
-
-        /**
-         * @param {object} options
-         * @returns {Promise}
-         */
-        publish: function(options) {
-
-            if (options.v === true) {
-                options.v = 1;
-            }
-
-            var self        = this,
-                git         = self.git,
-                deferred    = new Promise,
-                vMod        = options.v && options.m ? parseInt(options.v, 10) : null,
-                versionSet  = false,
-                newVersion  = null,
-                onErr       = function(err) {
-
-                    if (versionSet && vMod !== null) {
-                        self.setVersion(-vMod);
-                    }
-
-                    deferred.reject(err);
-                };
-
-            // check if there were changes
-            git.hasChanges(options.w === true)
-                .fail(onErr)
-                // build and test
-                .then(function(hasChanges){
-
-                    if (hasChanges) {
-                        console.log("\n\n");
-                        console.log(self.name + " has changes");
-
-                        try {
-                            process.chdir(self.location);
-                            Builder.buildAll();
-                        }
-                        catch (thrown) {
-                            deferred.reject(thrown);
-                        }
-
-                        if (options.test !== false) {
-                            return self.test();
-                        }
-                        else {
-                            return true;
-                        }
-                    }
-                    else {
-                        return deferred.resolve();
-                    }
-                })
-                // compile all
-                .then(function(){
-                    if (deferred.isPending()) {
-
-                        if (options.compile !== false) {
-                            process.chdir(self.location);
-                            return Builder.compileAll(true, true).fail(onErr);
-                        }
-                        else {
-                            return true;
-                        }
-                    }
-
-                    return true;
-                })
-                // set new version
-                .then(function(){
-                    if (deferred.isPending()) {
-
-                        self.syncPackageFiles();
-
-                        if (vMod) {
-                            newVersion = self.setVersion(vMod);
-                            versionSet = true;
-                        }
-                    }
-                })
-                // add changes to git
-                .then(function(){
-                    if (deferred.isPending()) {
-                        console.log("adding changes to git");
-                        return git.addAll().fail(onErr);
-                    }
-                    else {
-                        return true;
-                    }
-                })
-                // commit changes
-                .then(function(){
-                    if (deferred.isPending() && options.m) {
-                        console.log("committing changes with message " + options.m);
-                        return git.commit(options.m).fail(onErr);
-                    }
-                    else {
-                        return deferred.resolve();
-                    }
-                })
-                // set git tag
-                .then(function(){
-                    if (deferred.isPending() && vMod) {
-                        console.log("setting git tag " + newVersion);
-                        return git.setTag(newVersion).fail(onErr);
-                    }
-                    else {
-                        return true;
-                    }
-                })
-                // push to github
-                .then(function(){
-                    if ((deferred.isPending() && options.p) || options.forcePush) {
-                        console.log("publishing to git");
-                        var funcs = [],
-                            push  = self.config.push;
-
-                        if (push) {
-                            push.forEach(function(remote){
-                                var branch;
-                                if (typeof remote == "string") {
-                                    branch = "--all";
-                                }
-                                else {
-                                    branch = remote[1];
-                                    remote = remote[0];
-                                }
-                                funcs.push(function(remote, branch){
-                                    return function() {
-                                        console.log("pushing " + branch + " to " + remote);
-                                        return git.push(remote, branch);
-                                    }
-                                }(remote, branch));
-
-                                funcs.push(function(remote){
-                                    return function() {
-                                        console.log("sending tags to " + remote);
-                                        return git.push(remote, "--tags");
-                                    }
-                                }(remote));
-                            });
-
-                            return Promise.waterfall(funcs);
-                        }
-                    }
-
-                    return deferred.resolve();
-                })
-                // publish npm
-                .then(function(){
-                    if (deferred.isPending() && vMod && self.hasNpm) {
-                        console.log("publishing npm");
-                        return self.publishNpm().fail(onErr);
-                    }
-                    else {
-                        return deferred.resolve();
-                    }
-                })
-                .then(function(){
-                    deferred.resolve();
-                });
-
-
-            return deferred;
-        },
-
-        syncPackageFiles: function() {
-
-            var self    = this,
-                pJson   = self.location + "/package.json",
-                bJson   = self.location + "/bower.json";
-
-            if (self.hasNpm) {
-                self.npmJson.description = self.config.description;
-                fs.writeFileSync(pJson, JSON.stringify(self.npmJson, null, "    "));
-            }
-            if (self.hasBower) {
-                self.bowerJson.description = self.config.description;
-                fs.writeFileSync(bJson, JSON.stringify(self.bowerJson, null, "    "));
-            }
-
-        },
-
-        setVersion: function(mod) {
-
-            var self    = this,
-                mJson   = self.location + "/metaphorjs.json",
-                pJson   = self.location + "/package.json",
-                bJson   = self.location + "/bower.json",
-                mjs     = require(mJson),
-                version = mjs.version;
-
-            console.log(version, '->', (version = increaseVersion(version, mod)));
-
-            self.config.version = version;
-            fs.writeFileSync(mJson, JSON.stringify(self.config, null, "    "));
-
-            if (self.hasNpm) {
-                self.npmJson.version = version;
-                fs.writeFileSync(pJson, JSON.stringify(self.npmJson, null, "    "));
-            }
-            if (self.hasBower) {
-                self.bowerJson.version = version;
-                fs.writeFileSync(bJson, JSON.stringify(self.bowerJson, null, "    "));
-            }
-
-            return version;
-        },
-
-        publishNpm: function() {
-            process.chdir(this.location);
-            return passthru("npm", ["publish"]);
-        }
-
-    };
-
-
-    Project.testAll = function() {
-
-        var projects = [],
-            location,
-            project;
-
-        eachProject(function(project, projectFile){
-            projects.push(path.dirname(projectFile));
-        });
-
-        var next = function() {
-
-            location = projects.shift();
-
-            if (location) {
-                project = new Project(location);
-
-                project.test().then(next, function(){
-                    process.exit();
-                });
-            }
-            else {
-                process.exit(0);
-            }
-        };
-
-        next();
-    };
-
-    Project.publishAll = function() {
-
-        var options     = parseArgs(process.argv.slice(2), {boolean: true}),
-            projects    = [],
-            location,
-            project;
-
-        eachProject(function(project, projectFile){
-            projects.push(path.dirname(projectFile));
-        });
-
-        var next = function() {
-
-            location = projects.shift();
-            //projects = []; // tmp; do only one
-
-            if (location) {
-                project = new Project(location);
-
-                project.publish(options).then(next, function(reason){
-
-                    console.log("Project " + location + " failed with reason: ", reason);
-                    process.exit();
-                });
-            }
-            else {
-                process.exit(0);
-            }
-        };
-
-
-        next();
-    };
-
-    return Project;
-
-}();
-var MetaphorJsExports = {};
-MetaphorJsExports['Build'] = Build;
-MetaphorJsExports['Builder'] = Builder;
-MetaphorJsExports['File'] = File;
-MetaphorJsExports['JsonFile'] = JsonFile;
-MetaphorJsExports['Git'] = Git;
-MetaphorJsExports['Project'] = Project;
-module.exports = MetaphorJsExports;
+var bundle_002 = {};
+bundle_002['Bundle'] = Bundle;
+bundle_002['Builder'] = Builder;
+bundle_002['File'] = File;
+bundle_002['Config'] = Config;
+bundle_002['Import'] = Import;
+bundle_002['Base'] = Base;
+
+module.exports = bundle_002;
+/* BUNDLE END 002 */

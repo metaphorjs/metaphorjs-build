@@ -3,8 +3,9 @@ var cp = require("child_process"),
     Promise = require("metaphorjs-promise/src/lib/Promise.js");
 
 /**
- * @param cmd
- * @param args
+ * @function
+ * @param {string} cmd
+ * @param {string} args
  * @returns {Promise}
  */
 module.exports = function(cmd, args) {

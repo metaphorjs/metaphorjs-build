@@ -12,17 +12,24 @@
             "auto": true,
             "files": [
                 ["metaphorjs/src/MetaphorJs.js", {"as": "MetaphorJs"}],
-                ["src/**", {"as": "*"}]
+                ["src/**"]
             ],
-            "expose": [
-                "Build",
-                "Builder",
-                "File",
-                "JsonFile",
-                "Git",
-                "Project"
+            "omit": [
+                "src/class/**"
             ],
-            "exports": true
+            "options": {
+                "exports": true,
+                "expose": [
+                    "Bundle",
+                    "Builder",
+                    "File",
+                    "Config",
+                    "Import",
+                    "Base",
+                    "build",
+                    "compile"
+                ]
+            }
         }
     }
 }

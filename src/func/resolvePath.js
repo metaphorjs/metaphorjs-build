@@ -3,14 +3,18 @@ var fs = require("fs"),
     path = require("path"),
     isDir = require("metaphorjs/src/func/fs/isDir.js");
 
+
+/**
+ * Resolve path or file pattern to an asbolute path or file pattern
+ * @function
+ * @param {string} toResolve 
+ * @param {array} locations 
+ * @param {string} resolveDir 
+ */
 module.exports = function(toResolve, locations, resolveDir) {
 
-    if (toResolve.indexOf("./") !== 0 &&
-        toResolve.indexOf("../") !== 0 &&
-        toResolve.indexOf("*") === -1 &&
-        toResolve.indexOf("/") === -1 &&
-        toResolve.indexOf(".js") !== toResolve.length - 3) {
-        return true;
+    if (!toResolve) {
+        return null;
     }
 
     locations = locations || [];
@@ -21,6 +25,16 @@ module.exports = function(toResolve, locations, resolveDir) {
     if (process.env.NODE_PATH) {
         locations = locations.concat(process.env.NODE_PATH.split(path.delimiter));
     }
+
+    try {
+        var resolved = require.resolve(toResolve, {
+            paths: locations
+        });
+        if (resolved) {
+            return resolved;
+        }
+    }
+    catch (thrown) {}
 
     var norm = toResolve,
         inx,
@@ -59,14 +73,12 @@ module.exports = function(toResolve, locations, resolveDir) {
         }
     }
 
-    try {
-        var resolved = require.resolve(toResolve);
-        if (resolved === toResolve) {
-            return true;
-        }
-        return resolved;
+    /*try {
+        return require.resolve(toResolve);
     }
-    catch (thrown) {}
+    catch (thrown) {}*/
 
-    return false;
+    
+
+    return null;
 };

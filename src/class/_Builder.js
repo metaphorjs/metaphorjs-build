@@ -3,28 +3,31 @@ var fs              = require("fs"),
     child           = require("child_process"),
     path            = require("path"),
 
+    Base            = require("./Base.js"),
     File            = require("./File.js"),
-    eachProject     = require("../func/eachProject.js"),
-    Build           = require("./Build.js"),
+    Bundle          = require("./Bundle.js"),
     JsonFile        = require("./JsonFile.js"),
 
     isFile          = require("metaphorjs/src/func/fs/isFile.js"),
     isArray         = require("metaphorjs/src/func/isArray.js"),
     trim            = require("metaphorjs/src/func/trim.js"),
 
-    TextRenderer    = require("metaphorjs/src/class/TextRenderer.js"),
     Scope           = require("metaphorjs/src/lib/Scope.js"),
 
     Promise         = require("metaphorjs-promise/src/lib/Promise.js");
 
 
 
-var minify = require('html-minifier').minify;
+    
 
+/**
+ * @class Builder
+ */
 
-var Builder         = function(action, projectFile) {
+var Builder         = function(buildName, projectFile) {
 
-    if (!isFile(projectFile) && !(projectFile instanceof JsonFile)) {
+    if (!isFile(projectFile) && 
+        !(projectFile instanceof JsonFile)) {
         throw projectFile + " not found";
     }
 
@@ -32,8 +35,8 @@ var Builder         = function(action, projectFile) {
 
     self.jsonFile       = projectFile instanceof JsonFile ? projectFile : JsonFile.get(projectFile);
     self.projectFile    = projectFile instanceof JsonFile ? projectFile.path : projectFile;
-    self.bld            = new Build(self.jsonFile, action);
-
+    self.bundle         = Bundle.get(self.jsonFile, buildName, "build");
+    self.buildName      = buildName;
 };
 
 Builder.prototype   = {
@@ -53,22 +56,27 @@ Builder.prototype   = {
     gettersCode:    null,
     gettersCodes:   null,
 
+    /**
+     * Create build
+     * @method
+     */
     build:          function() {
 
         var self    = this,
-            bld     = self.bld;
+            target,
+            content;
 
-        if (bld.templates) {
-            self.prepareTemplates();
-            //console.log(bld.templates)
-        }
+        self.bundle.collect();
+        self.bundle.prepareBuildList();
 
-        if (bld.files.length && bld.target) {
-            self.concat();
-        }
+        target      = self.jsonFile.build[self.buildName].target;
+        target      = path.normalize(self.jsonFile.base + "/" + target);
+        content     = self.bundle.getContent();
+
+        fs.writeFileSync(target, content);
     },
 
-    prepareTemplates: function() {
+    /*prepareTemplates: function() {
 
         var self = this,
             scope = new Scope,
@@ -107,38 +115,15 @@ Builder.prototype   = {
                 tplUrl = tplCfg.prefix + tplUrl;
             }
 
-            //var tr = new TextRenderer(scope, tpl, null, null, null, boundary, "mock");
-
             tpls[tplUrl] = tpl;
-
-            /*tr.watchers.forEach(function(w, inx){
-                var cfg = w.getConfig();
-                if (cfg.type === "expr" && !cfg.hasPipes && !cfg.hasInputPipes) {
-                    var nextInx = fns.length;
-                    fns.push(cfg.getter);
-                    codes.push(cfg.code);
-                    tpl = tr.processed.replace(
-                        boundary + inx + boundary,
-                        saveBoundary + nextInx + saveBoundary
-                    );
-                }
-                else {
-                    tpl = tr.processed.replace(
-                        boundary + inx + boundary,
-                        '{{ ' + cfg.code + ' }}'
-                    );
-                }
-
-                tpls[tplUrl] = tpl;
-            });*/
         }
 
         self.templates = tpls;
         self.gettersCode = "[" + fns.join(", ") + "]";
         self.gettersCodes = codes;
-    },
+    },*/
 
-    concat:        function() {
+    /*concat:        function() {
 
         var self        = this,
             bld         = self.bld,
@@ -405,6 +390,7 @@ Builder.prototype   = {
 
         var self        = this,
             bld         = self.bld,
+            promise     = new Promise,
             source      = path.normalize(self.jsonFile.base + bld.target),
             target      = bld.compileTarget ?
                             path.normalize(self.jsonFile.base + bld.compileTarget) :
@@ -442,16 +428,13 @@ Builder.prototype   = {
         proc.stderr.pipe(process.stderr);
         proc.stdout.pipe(out);
         proc.on("exit", function(code) {
-            if (onFinish) {
-                onFinish(code);
-            }
-            else {
-                process.exit(code);
-            }
+            promise.resolve();
         });
         proc.on("error", function(error) {
             console.log(error);
         });
+
+        return promise;
     },
 
     collectNames: function() {
@@ -475,140 +458,8 @@ Builder.prototype   = {
 
         return names;
 
-    }
+    }*/
 };
 
 
 
-/**
- * @param {function} fn
- */
-var eachBuild = function(fn) {
-
-    eachProject(function(project, projectFile){
-
-        var builds = project.build,
-            i;
-
-        if (builds) {
-            for (i in builds) {
-                fn(builds[i], projectFile, i);
-            }
-        }
-    });
-};
-
-
-Builder.build = function(action, projectFile) {
-
-    if (!projectFile) {
-        projectFile = process.cwd() + "/metaphorjs.json";
-    }
-
-    var actions = [];
-
-    if (!action) {
-        var project    = require(projectFile),
-            builds      = project.build;
-
-        if (builds) {
-            for (var i in builds) {
-                if (builds[i].auto) {
-                    actions.push(i);
-                }
-            }
-        }
-    }
-    else {
-        actions.push(action);
-    }
-
-    actions.forEach(function(action){
-        var builder     = new Builder(action, projectFile);
-        builder.build();
-
-    });
-};
-
-Builder.buildAll = function(auto) {
-
-    var b;
-
-    eachBuild(function(build, projectFile, buildName){
-        if (!auto || build.auto) {
-            b = new Builder(buildName, projectFile);
-            b.build();
-        }
-    });
-
-};
-
-
-Builder.compile = function(action, projectFile) {
-
-    if (!projectFile) {
-        projectFile = process.cwd() + "/metaphorjs.json";
-    }
-    if (!action) {
-        throw "Must specify build. Or use mjs-compile --all";
-    }
-
-    var deferred    = new Promise;
-
-    var builder     = new Builder(action, projectFile);
-    builder.build();
-    builder.compile(function(){
-        deferred.resolve();
-    });
-
-    return deferred;
-};
-
-
-Builder.compileAll = function(noExit, noBuild) {
-
-    var b,
-        builds      = [],
-        deferred    = new Promise,
-        item,
-        next        = function(code) {
-
-            if (code !== 0) {
-                deferred.reject(item[1] + " failed compiling with code " + code);
-                if (!noExit) {
-                    process.exit(code);
-                }
-                return;
-            }
-
-            item = builds.shift();
-
-            if (!item) {
-                deferred.resolve();
-                if (!noExit) {
-                    process.exit(0);
-                }
-                return;
-            }
-
-            b = new Builder(item[0], item[1]);
-            if (!noBuild) {
-                b.build();
-            }
-            b.compile(next);
-        };
-
-    eachBuild(function(project, projectFile, buildName){
-        if (project.compile !== false) {
-            builds.push([buildName, projectFile]);
-        }
-    });
-
-    next(0);
-
-    return deferred;
-};
-
-
-
-module.exports = Builder;

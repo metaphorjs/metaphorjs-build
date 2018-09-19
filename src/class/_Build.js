@@ -1,11 +1,4 @@
 
-var path = require("path"),
-
-    JsonFile = require("./JsonFile.js"),
-    File = require("./File.js"),
-    resolvePath = require("../func/resolvePath.js"),
-
-    getFileList = require("metaphorjs/src/func/fs/getFileList.js");
 
 
 var Build = function(jsonFile, name) {
@@ -361,13 +354,11 @@ Build.prototype = {
             if (opt && opt.as) {
                 file = File.getOrCreate(filePath);
                 if (typeof opt.as === "string") {
-                    //file.addAs(opt.as, allAliases);
                     addAlias(file, opt.as);
                 }
                 else {
                     opt.as.forEach(function(as) {
                         addAlias(file, as);
-                        //file.addAs(as, allAliases);
                     });
                 }
             }
