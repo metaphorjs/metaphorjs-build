@@ -9,32 +9,15 @@ var Config = require("../Config.js"),
  */
 module.exports = function(name) {
 
-    var config = Config.getCurrent(),
-        actions = [],
-        builds, 
-        i;
+    var config = Config.getCurrent();
 
     if (!config) {
-        throw "metaphorjs.json not found in current directory";
+        throw "metaphorjs.json not found in current directory!"
     }
-
     if (!name) {
-        builds      = config.build;
-
-        if (builds) {
-            for (i in builds) {
-                if (builds[i].auto) {
-                    actions.push(i);
-                }
-            }
-        }
-    }
-    else {
-        actions.push(name);
+        throw "Must specify build";
     }
 
-    actions.forEach(function(name){
-        var builder     = new Builder(name, config);
-        builder.build();
-    });
+    var builder     = new Builder(name, config);
+    builder.build();
 };
