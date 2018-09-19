@@ -163,13 +163,24 @@ module.exports = Base.$extend({
         var self    = this,
             cwd     = process.cwd(),
             bdir    = self.getBuilderDir(),
+            chdir   = false,
+            bcfg,
             promise;
+
+        if (fs.existsSync(cwd + "/.babelrc"))  {
+            bcfg = cwd + "/.babelrc";
+        } 
+        else if (fs.existsSync(bdir + "/.babelrc")) {
+            bcfg = bdir + "/.babelrc";
+            chdir = true;
+        }
 
         console.log("Running babel " + self.buildName);
 
         promise = new Promise(function(resolve, reject){
-            //process.chdir(bdir);
-            
+
+            chdir && process.chdir(bdir);
+
             var target = self.getRandTmpFile(),
                 out = fs.createWriteStream(target),
                 args = ["babel"],
@@ -180,11 +191,16 @@ module.exports = Base.$extend({
             fs.writeFileSync(source, code);
             args.push(source);
 
+            if (bcfg) {
+                args.push("--config-file");
+                args.push(bcfg);
+            }
+
             proc = cp.spawn(bin, args);
             proc.stderr.pipe(process.stderr);
             proc.stdout.pipe(out);
             proc.on("exit", function() {
-                //process.chdir(cwd);
+                chdir && process.chdir(cwd);
                 var code = fs.readFileSync(target).toString();
                 fs.unlinkSync(source);
                 fs.unlinkSync(target);

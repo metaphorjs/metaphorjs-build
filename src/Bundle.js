@@ -203,6 +203,7 @@ var Bundle = Base.$extend({
     getContent: function() {
         var self = this,
             code = "",
+            strict = self.getOption("strict"),
             wrap = self.needsWrapping(),
             globl = self.getOption("global"),
             expose = self.getOption("expose"),
@@ -255,6 +256,10 @@ var Bundle = Base.$extend({
         }
 
         code += '/* BUNDLE END ' + self.id + ' */';
+
+        if (strict !== false) {
+            code = '"use strict";\n' + code;
+        }
 
         return code;
     },

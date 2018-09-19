@@ -10,6 +10,7 @@
         "npm": {
             "target": "dist/metaphorjs.build.js",
             "auto": true,
+            "pipe": ["build", "babel", "write"],
             "files": [
                 ["metaphorjs/src/MetaphorJs.js", {"as": "MetaphorJs"}],
                 ["src/**"]
