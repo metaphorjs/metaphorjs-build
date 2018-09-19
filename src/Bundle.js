@@ -227,8 +227,12 @@ var Bundle = Base.$extend({
         }
 
         if (wrap) {
-            if (expose || ret) {
+            if (ret) {
                 code = self.trigger("code-return", code, ret || exposeName);
+            }
+
+            if (strict !== false) {
+                code = '"use strict";\n' + code;
             }
         
             code = self.trigger("code-wrap", code);
@@ -257,7 +261,7 @@ var Bundle = Base.$extend({
 
         code += '/* BUNDLE END ' + self.id + ' */';
 
-        if (strict !== false) {
+        if (!wrap && strict !== false) {
             code = '"use strict";\n' + code;
         }
 
