@@ -48,7 +48,7 @@ module.exports = Base.$extend({
 
     getTargetPath: function() {
         var self = this, target;
-        target  = self.config.build[self.buildName].target;
+        target  = self.config.getBuildConfig(self.buildName).target;
         target  = path.resolve(self.config.base, target);
         return target;
     },
@@ -67,9 +67,16 @@ module.exports = Base.$extend({
 
     build: function() {
         var self = this,
-            cfg = self.config.build[self.buildName],
-            pipe = ((cfg.pipe || "build|write")+"").split("|");
-
+            cfg = self.config.getBuildConfig(self.buildName),
+            pipe = cfg.pipe || [];
+        
+        if (typeof pipe === "string") {
+            pipe = pipe.split("|");
+        }
+        if (pipe.length === 0) {
+            pipe = ["build", "write"];
+        }
+        
         pipe.forEach(function(processor){
             if (self["_" + processor]) {
                 self.on("pipe", self["_" + processor], self);
@@ -138,7 +145,6 @@ module.exports = Base.$extend({
             proc.on("exit", function() {
                 process.chdir(cwd);
                 var code = fs.readFileSync(target).toString();
-                console.log(code ? code.length : "bad file")
                 fs.unlinkSync(source);
                 fs.unlinkSync(target);
                 resolve(code);
@@ -162,7 +168,7 @@ module.exports = Base.$extend({
         console.log("Running babel " + self.buildName);
 
         promise = new Promise(function(resolve, reject){
-            process.chdir(bdir);
+            //process.chdir(bdir);
             
             var target = self.getRandTmpFile(),
                 out = fs.createWriteStream(target),
@@ -177,10 +183,9 @@ module.exports = Base.$extend({
             proc = cp.spawn(bin, args);
             proc.stderr.pipe(process.stderr);
             proc.stdout.pipe(out);
-            proc.on("exit", function(code) {
-                process.chdir(cwd);
+            proc.on("exit", function() {
+                //process.chdir(cwd);
                 var code = fs.readFileSync(target).toString();
-                console.log(code ? code.length : "bad file")
                 fs.unlinkSync(source);
                 fs.unlinkSync(target);
                 resolve(code);

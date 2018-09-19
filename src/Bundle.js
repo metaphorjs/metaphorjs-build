@@ -78,7 +78,7 @@ var Bundle = Base.$extend({
     collect: function(config, name) {
 
         var self        = this,
-            mixin       = config.build[name] || config.mixin[name];
+            mixin       = config.getBuildConfig(name);
 
         if (!mixin) {
             throw mixin + " not found in " + config.path;
@@ -207,6 +207,7 @@ var Bundle = Base.$extend({
             globl = self.getOption("global"),
             expose = self.getOption("expose"),
             amd = self.getOption("amd"),
+            ret = self.getOption("return"),
             doesExport = self.getOption("exports"),
             exposeName = self.getOption("exposeIn", self.getUniqueName());
 
@@ -225,8 +226,8 @@ var Bundle = Base.$extend({
         }
 
         if (wrap) {
-            if (expose) {
-                code = self.trigger("code-return", code, exposeName);
+            if (expose || ret) {
+                code = self.trigger("code-return", code, ret || exposeName);
             }
         
             code = self.trigger("code-wrap", code);

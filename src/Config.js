@@ -2,6 +2,7 @@
 
 var path            = require("path"),
     fs              = require("fs"),
+    extend          = require("metaphorjs/src/func/extend.js"),
     Base            = require("./Base.js");
 
 /**
@@ -51,6 +52,22 @@ module.exports = function(){
             for (key in json) {
                 self[key] = json[key];
             }
+        },
+
+        getBuildConfig: function(name) {
+
+            var cfg = this.build[name] || this.mixin[name];
+
+            if (cfg) {
+                if (cfg.extend) {
+                    var base = this.getBuildConfig(cfg.extend);
+                    cfg = extend({}, base, cfg, true, false);
+                    delete cfg.extend;
+                }
+                return cfg;
+            }
+
+            return null;
         }
     }, {
 
