@@ -37,8 +37,28 @@ module.exports = Base.$extend({
         host.on("code-amd-module", self.amdModule, self);
     },
 
-    wrap: function(code) {
-        return "(function(){\n" + code + "\n}());";
+    wrap: function(code, wrapCfg) {
+        if (!wrapCfg || wrapCfg === true) {
+            return "(function(){\n" + code + "\n}());";
+        }
+        var wrapArgs    = "";
+        if (wrapCfg.args) {
+            wrapArgs =  wrapCfg.args.join(", ");
+        }
+
+        var wrapName    = wrapCfg.name || "";
+
+        var wrapStart   = wrapCfg.start ||
+                            wrapCfg.deferred ?
+                                "function "+wrapName+"("+wrapArgs+") {\n" :
+                                "(function("+wrapArgs+"){\n";
+
+        var wrapEnd     = wrapCfg.end ||
+                            wrapCfg.deferred ?
+                                "\n};" :
+                                "\n}("+wrapArgs+"));";
+
+        return wrapStart + code + wrapEnd;
     },
 
     replaceEs5Export: function(code, action) {

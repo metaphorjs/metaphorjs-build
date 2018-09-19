@@ -235,13 +235,13 @@ var Bundle = Base.$extend({
                 code = '"use strict";\n' + code;
             }
         
-            code = self.trigger("code-wrap", code);
+            code = self.trigger("code-wrap", code, self.getOption("wrap"));
 
             if (!self.top) {
                 code = self.trigger("code-prepend-var", code, self.getUniqueName());
             }
 
-            if (doesExport && expose) {
+            if (doesExport && ret) {
                 code = self.trigger("code-export", false) + code;
             }
         }
