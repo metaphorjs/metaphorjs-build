@@ -206,10 +206,13 @@ var Bundle = Base.$extend({
             code = "",
             strict = self.getOption("strict"),
             wrap = self.needsWrapping(),
+            prepend = self.getOption("prepend"),
+            append = self.getOption("append"),
             globl = self.getOption("global"),
             expose = self.getOption("expose"),
             amd = self.getOption("amd"),
             ret = self.getOption("return"),
+            req = self.getOption("require"),
             doesExport = self.getOption("exports");
 
         code += '/* BUNDLE START ' + self.id + ' */';
@@ -244,6 +247,18 @@ var Bundle = Base.$extend({
             if (doesExport) {
                 code += self.trigger("code-export", doesExport, self);
             }
+        }
+
+        if (req) {
+            code = self.trigger("code-require", req, self) + code;
+        }
+
+        if (prepend) {
+            code = self.trigger("code-prepend", prepend, self) + code;
+        }
+
+        if (append) {
+            code = code + self.trigger("code-append", append, self);
         }
 
         if (amd) {

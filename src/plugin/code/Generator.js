@@ -1,4 +1,7 @@
-var Base = require("../../Base.js");
+var Base = require("../../Base.js"),
+    path = require("path"),
+    fs = require("fs");
+    
 
 module.exports = Base.$extend({
 
@@ -23,6 +26,9 @@ module.exports = Base.$extend({
         host.$$observable.createEvent("code-export", "first");
         host.$$observable.createEvent("code-global", "first");
         host.$$observable.createEvent("code-amd-module", "first");
+        host.$$observable.createEvent("code-require", "first");
+        host.$$observable.createEvent("code-prepend", "first");
+        host.$$observable.createEvent("code-append", "first");
 
         host.on("code-wrap", self.wrap, self);
         host.on("code-replace-export", self.replaceEs5Export, self);
@@ -35,6 +41,9 @@ module.exports = Base.$extend({
         host.on("code-export", self.export, self);
         host.on("code-global", self.exposeGlobal, self);
         host.on("code-amd-module", self.amdModule, self);
+        host.on("code-require", self.requireMods, self);
+        host.on("code-prepend", self.addFiles, self);
+        host.on("code-append", self.addFiles, self);
     },
 
     wrap: function(code, wrapCfg) {
@@ -46,6 +55,8 @@ module.exports = Base.$extend({
             wrapArgs =  wrapCfg.args.join(", ");
         }
 
+        var ret = wrapCfg.return ? "\nreturn " + wrapCfg.return + ";\n" : "";
+        
         var wrapName    = wrapCfg.name || "";
 
         var wrapStart   = wrapCfg.start ||
@@ -54,10 +65,9 @@ module.exports = Base.$extend({
                                 "(function("+wrapArgs+"){\n";
 
         var wrapEnd     = wrapCfg.end ||
-                            wrapCfg.deferred ?
-                                "\n};" :
-                                "\n}("+wrapArgs+"));";
-
+                            (ret + (wrapCfg.deferred ?
+                                    "\n};" :
+                                    "\n}("+wrapArgs+"));"));
         return wrapStart + code + wrapEnd;
     },
 
@@ -209,6 +219,7 @@ module.exports = Base.$extend({
     },
 
     amdModule: function(code, def, bundle) {
+
         var defName = def.name,
             defDeps = def.deps,
             defRet  = def.return || "__mjsExport",
@@ -235,5 +246,46 @@ module.exports = Base.$extend({
         }
 
         return start + code + end + "\n";
+    },
+
+    requireMods: function(mods) {
+        var code = "",
+            parts = [],
+            mod, varName, part, req;
+
+        for (var mod in mods) {
+            req = mods[mod];
+            if (typeof req === "string") {
+                varName = req;
+            }
+            else {
+                varName = req.as;
+            }
+            part = varName + ' = require("'+ mod +'")';
+
+            if (req.args) {
+                part += '(';
+                part += req.args.join(", ");
+                part += ')';
+            }
+
+            parts.push(part);
+        }
+
+        if (parts.length) {
+            code = "\nvar " + parts.join(",\n") + ";\n";
+        }
+
+        return code;
+    },
+
+    addFiles: function(files, bundle) {
+        code = "";
+        files.forEach(function(file) {
+            var filePath = path.normalize(bundle.builder.config.base + file);
+            code += fs.readFileSync(filePath).toString();
+            code += "\n";
+        });
+        return code;
     }
 });
