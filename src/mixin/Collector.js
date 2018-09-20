@@ -87,7 +87,7 @@ module.exports = ns.register("mixin.Collector", {
         else {
             getFileList(resolvePath(file, [config.base]), "js")
                 .forEach(function(file){
-                    var f = File.get(file, fileDef[1]);
+                    var f = self.builder.getFile(file, fileDef[1]);
                     f.setOption("base", config.base);
 
                     var res = self.trigger("collect-filter", f, self);

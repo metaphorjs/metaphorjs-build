@@ -10,8 +10,6 @@ require("./plugin/code/Generator.js");
 require("./mixin/WithImports.js");
 require("./mixin/Collector.js");
 
-var all = {};
-
 /**
  * @class Bundle
  */
@@ -26,6 +24,7 @@ var Bundle = Base.$extend({
     type: null,
     top: false,
     parent: null,
+    builder: null,
 
     $constructor: function() {
         this.$plugins.push("plugin.bundle.FileProcessor");
@@ -40,8 +39,9 @@ var Bundle = Base.$extend({
      * @constructor
      * @param {string} name
      * @param {string} type
+     * @param {Builder} builder
      */
-    $init: function(name, type) {
+    $init: function(name, type, builder) {
 
         var self = this;
 
@@ -50,6 +50,7 @@ var Bundle = Base.$extend({
         self.$$observable.createEvent("process-file", "pipe");  
 
         self.id = nextUid();
+        self.builder = builder;
         self.name = name;
         self.type = type;
         self.buildList = [];
@@ -93,7 +94,7 @@ var Bundle = Base.$extend({
         var replacement;
         for (var path in self.collected) {
             while (self.allReplaces[path]) {
-                replacement = File.get(self.allReplaces[path]);
+                replacement = self.builder.getFile(self.allReplaces[path]);
                 self.collected[replacement.path] = replacement;
                 delete self.collected[path];
                 path = replacement.path;
@@ -209,61 +210,47 @@ var Bundle = Base.$extend({
             expose = self.getOption("expose"),
             amd = self.getOption("amd"),
             ret = self.getOption("return"),
-            doesExport = self.getOption("exports"),
-            exposeName = self.getOption("exposeIn", self.getUniqueName());
+            doesExport = self.getOption("exports");
 
         code += '/* BUNDLE START ' + self.id + ' */';
-
+        strict !== false && (code += '\n"use strict";\n');
         code += self.trigger("code-module-imports", self).join("\n");
         code += this.buildList.join("\n");
 
         if (expose) {
-            code = self.trigger("code-expose", code, exposeName, expose);
+            code += self.trigger("code-expose", expose, self);
         }
+
         if (globl) {
-            code += self.trigger("code-global", 
-                    globl === true ? 'MetaphorJs' : globl, 
-                    exposeName);
+            code += self.trigger("code-global", globl, self);
         }
 
         if (wrap) {
             if (ret) {
-                code = self.trigger("code-return", code, ret || exposeName);
-            }
-
-            if (strict !== false) {
-                code = '"use strict";\n' + code;
+                code += self.trigger("code-return", ret, self);
             }
         
-            code = self.trigger("code-wrap", code, self.getOption("wrap"));
+            code = self.trigger("code-wrap", code, self.getOption("wrap"), self);
 
             if (!self.top) {
-                code = self.trigger("code-prepend-var", code, self.getUniqueName());
+                code = self.trigger("code-prepend-var", self.getUniqueName(), self) + code;
             }
 
             if (doesExport && ret) {
-                code = self.trigger("code-export", false) + code;
+                code = self.trigger("code-export", false, self) + code;
             }
         }
         else {
             if (doesExport) {
-                code += self.trigger("code-export", 
-                                doesExport === true ? exposeName : doesExport);
+                code += self.trigger("code-export", doesExport, self);
             }
         }
 
         if (amd) {
-            if (!amd.return) {
-                amd.return = exposeName;
-            }
             code = self.trigger("code-amd-module", code, amd, self);
         }
 
         code += '/* BUNDLE END ' + self.id + ' */';
-
-        if (!wrap && strict !== false) {
-            code = '"use strict";\n' + code;
-        }
 
         return code;
     },
@@ -336,22 +323,6 @@ var Bundle = Base.$extend({
             });
             return list;
         }
-    }
-}, 
-
-// Static methods
-{
-    get: function(name, type) {
-        var fullName = ""+type +"/" + name;
-        if (!all[fullName]) {
-            all[fullName] = new Bundle(name, type);
-        }
-
-        return all[fullName];
-    },
-
-    exists: function(name, type) {
-        return !!all[""+type +"/" + name];
     }
 });
 

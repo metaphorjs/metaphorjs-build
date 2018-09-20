@@ -12,11 +12,6 @@ require("./plugin/code/Info.js");
 require("./plugin/code/Generator.js");
 require("./mixin/WithImports.js");
 
-
-
-
-var all = {};
-
 /**
  * @class File
  */
@@ -28,6 +23,7 @@ var File = Base.$extend({
     id: null,
     path: null,
     bundle: null,
+    builder: null,
 
     $constructor: function() {
         this.$plugins.push("plugin.file.NodeModule");
@@ -43,8 +39,9 @@ var File = Base.$extend({
      * @constructor
      * @param {string} filePath
      * @param {object} options
+     * @param {Builder} builder
      */
-    $init: function(filePath, options) {
+    $init: function(filePath, options, builder) {
 
         var self = this;
 
@@ -56,13 +53,14 @@ var File = Base.$extend({
         self.$$observable.createEvent("decide-module-exports", "merge");
 
         self.id         = nextUid();
+        self.builder    = builder;
         self.path       = filePath;
         self._processed = false;
         self.content    = "";
 
         self.on("set_as", self._setArrayOption, self);
         self.on("set_as", self._setAsOption, self);
-        
+
         self.$super(options);
     },
 
@@ -172,7 +170,7 @@ var File = Base.$extend({
                 throw reqPath + " required in " + self.path + " does not exist";
             }
 
-            reqFile = File.get(resPath);
+            reqFile = self.builder.getFile(resPath);
 
             self.addImport(new Import({
                 type: "require",
@@ -275,32 +273,6 @@ var File = Base.$extend({
      */
     toString: function() {
         return this.getContent();
-    }
-}, {
-
-    /**
-     * Singleton method. Use instead of constructor.
-     * @static
-     * @method
-     * @param {string} filePath 
-     * @param {object} options 
-     */
-    get: function(filePath, options) {
-        if (!all[filePath]) {
-            all[filePath] = new File(filePath, options);
-        }
-        else {
-            if (options) {
-                var f = all[filePath];
-                for (var key in options) {
-                    if (f.getOption(key) !== null) {
-                        f.setOption(key, options[key]);
-                    }
-                }
-            }
-        }
-    
-        return all[filePath];
     }
 });
 

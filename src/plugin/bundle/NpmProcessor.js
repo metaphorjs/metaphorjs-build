@@ -26,8 +26,7 @@ module.exports = Base.$extend({
                 return file;
             }
 
-            var Bundle = ns.get("Bundle");
-            var npmBundle = Bundle.get(info.npm.module, "npm");
+            var npmBundle = this.host.builder.getBundle(info.npm.module, "npm");
 
             // avoid infinite recursion
             if (npmBundle === bundle) {

@@ -2,15 +2,12 @@
 var fs              = require("fs"),
     path            = require("path"),
     cp              = require("child_process"),
-
     Base            = require("./Base.js"),
     Bundle          = require("./Bundle.js"),
+    File            = require("./File.js"),
     Config          = require("./Config.js"),
     nextUid         = require("metaphorjs/src/func/nextUid.js"),
-
     isFile          = require("metaphorjs/src/func/fs/isFile.js");
-
-
 
 /**
 * @class Builder
@@ -35,15 +32,51 @@ module.exports = Base.$extend({
             resolvePromises: true
         });
 
+        self.allFiles       = {};
+        self.allBundles     = {};
+
         self.config         = projectFile instanceof Config ? projectFile : Config.get(projectFile);
         self.projectFile    = projectFile instanceof Config ? projectFile.path : projectFile;
-        self.bundle         = Bundle.get(buildName, "build");
+        self.bundle         = self.getBundle(buildName, "build");
         self.buildName      = buildName;
 
         self.bundle.top     = true;
-        
 
         self.trigger("init", self);
+    },
+
+    getFile: function(filePath, options) {
+        var all = this.allFiles;
+
+        if (!all[filePath]) {
+            all[filePath] = new File(filePath, options, this);
+        }
+        else {
+            if (options) {
+                var f = all[filePath];
+                for (var key in options) {
+                    if (f.getOption(key) !== null) {
+                        f.setOption(key, options[key]);
+                    }
+                }
+            }
+        }
+    
+        return all[filePath];
+    },
+
+    getBundle: function(name, type) {
+        var all = this.allBundles;
+        var fullName = ""+type +"/" + name;
+        if (!all[fullName]) {
+            all[fullName] = new Bundle(name, type, this);
+        }
+
+        return all[fullName];
+    },
+
+    bundleExists: function(name, type) {
+        return !!this.allBundles[""+type +"/" + name];
     },
 
     getTargetPath: function() {
@@ -145,7 +178,7 @@ module.exports = Base.$extend({
             proc.on("exit", function() {
                 process.chdir(cwd);
                 var code = fs.readFileSync(target).toString();
-                fs.unlinkSync(source);
+                //fs.unlinkSync(source);
                 fs.unlinkSync(target);
                 resolve(code);
             });

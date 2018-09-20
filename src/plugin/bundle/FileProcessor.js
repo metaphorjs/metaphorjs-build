@@ -60,7 +60,7 @@ module.exports = Base.$extend({
         if (file && file instanceof File) {
             var replace = bundle.allReplaces;
             while (replace[file.path]) {
-                file = File.get(replace[file.path]);
+                file = this.host.builder.getFile(replace[file.path]);
             }
         }
 

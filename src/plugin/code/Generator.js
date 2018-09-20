@@ -13,11 +13,11 @@ module.exports = Base.$extend({
         var self = this,
             host = this.host;
 
-        host.$$observable.createEvent("code-wrap", "pipe");
+        host.$$observable.createEvent("code-wrap", "first");
         host.$$observable.createEvent("code-replace-export", "pipe");
-        host.$$observable.createEvent("code-prepend-var", "pipe");
-        host.$$observable.createEvent("code-return", "pipe");
-        host.$$observable.createEvent("code-expose", "pipe");
+        host.$$observable.createEvent("code-prepend-var", "first");
+        host.$$observable.createEvent("code-return", "first");
+        host.$$observable.createEvent("code-expose", "first");
         host.$$observable.createEvent("code-module-imports", "concat");
         host.$$observable.createEvent("code-wrapped-imports", "concat");
         host.$$observable.createEvent("code-export", "first");
@@ -29,7 +29,7 @@ module.exports = Base.$extend({
         host.on("code-replace-export", self.replaceEs6Export, self);
         host.on("code-prepend-var", self.prependVar, self);
         host.on("code-return", self.returnVar, self);
-        host.on("code-expose", self.exposeVars, self);
+        host.on("code-expose", self.expose, self);
         host.on("code-module-imports", self.moduleImports, self);
         host.on("code-wrapped-imports", self.wrappedImports, self);
         host.on("code-export", self.export, self);
@@ -81,15 +81,20 @@ module.exports = Base.$extend({
         return code;
     },
 
-    returnVar: function(code, varName) {
-        if (varName) {
-            return code + "\n\nreturn " + varName + ";\n";
+    returnVar: function(code, ret) {
+        if (ret) {
+            if (ret === true) {
+                return "\nreturn __mjsExport;\n";    
+            }
+            else if (typeof ret === "string") {
+                return "\nreturn " + ret + ";\n";
+            }
         }
-        return code;
+        return "";
     },
 
-    prependVar: function(code, varName) {
-        return "var " + varName + " = " + code;
+    prependVar: function(prepend) {
+        return "var " + prepend + " = ";
     },
 
     
@@ -144,34 +149,69 @@ module.exports = Base.$extend({
         return code;
     },
 
-    exposeVars: function(code, exposeIn, exposeList) {
-        var exp = "\nvar " + exposeIn + " = {};\n";
-        exposeList.forEach(function(name){
-            exp += exposeIn + "['" + name + "'] = " + name + ";\n";
+    expose: function(expose) {
+
+        if (typeof expose === "string") {
+            expose = [expose];
+        }
+        var exp = "\nvar __mjsExport = {};\n";
+
+        expose.forEach(function(entry) {
+            var key, name;
+            if (typeof entry === "string") {
+                key = name = entry;
+            }
+            else {
+                key = entry.as;
+                name = entry.name;
+            }
+
+            exp += "__mjsExport['" + key + "'] = " + name + ";\n";
         });
 
-        return code + exp;
+        return exp;
     },
 
     export: function(name) {
         if (name) {
-            return "\nmodule.exports = " + name + ";\n";
+            if (name === true) {
+                return "\nmodule.exports = __mjsExport;\n";
+            }
+            else {
+                return "\nmodule.exports = " + name + ";\n";
+            }
         }
         else {
             return "\nmodule.exports = ";
         }
     },
 
-    exposeGlobal: function(name, exposeName) {
+    exposeGlobal: function(globlCfg) {
+
+        var name = "MetaphorJs",
+            exposed = "__mjsExport";
+
+        if (globlCfg) {
+            if (globlCfg !== true) {
+                if (typeof globlCfg === "string") {
+                    name = globlCfg;
+                }
+                else {
+                    name = globlCfg.as;
+                    exposed = globlCfg.name;
+                }
+            }
+        }
+
         return "\ntypeof global != \"undefined\" ? " +
-                    "(global['"+name+"'] = "+ exposeName +") : "+
-                    "(window['"+name+"'] = "+ exposeName +");\n";
+                    "(global['"+name+"'] = "+ exposed +") : "+
+                    "(window['"+name+"'] = "+ exposed +");\n";
     },
 
     amdModule: function(code, def, bundle) {
         var defName = def.name,
             defDeps = def.deps,
-            defRet  = def.return,
+            defRet  = def.return || "__mjsExport",
             start   = 'define("'+ defName +'", ',
             end     = "\n});\n",
             deps    = [],
