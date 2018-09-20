@@ -229,7 +229,7 @@ var File = Base.$extend({
 
         if (self.needsWrapping()) {
             code = self.trigger("code-wrap", code);
-            code = self.trigger("code-prepend-var", code, name);
+            code = self.trigger("code-prepend-var", name) + code;
         }
 
         code = self.trigger("code-replace-export", code, 
