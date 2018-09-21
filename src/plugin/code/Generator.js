@@ -64,6 +64,10 @@ module.exports = Base.$extend({
                                 "function "+wrapName+"("+wrapArgs+") {\n" :
                                 "(function("+wrapArgs+"){\n";
 
+        if (wrapCfg.exports) {
+            wrapStart = "\nmodule.exports = " + wrapStart;
+        }
+
         var wrapEnd     = wrapCfg.end ||
                             (ret + (wrapCfg.deferred ?
                                     "\n};" :
@@ -159,10 +163,13 @@ module.exports = Base.$extend({
         return code;
     },
 
-    expose: function(expose) {
+    expose: function(expose, bundle) {
 
         if (typeof expose === "string") {
             expose = [expose];
+        }
+        if (expose[0] == '**') {
+            expose = bundle.getGlobalNames();
         }
         var exp = "\nvar __mjsExport = {};\n";
 

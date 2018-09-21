@@ -70,8 +70,7 @@ module.exports = Base.$extend({
 
             // top level wrapper func
             if (type == "ExpressionStatement" && 
-                entry.expression.type == "CallExpression" &&
-                entry.expression.callee.type == "FunctionExpression") {
+                entry.expression.type == "CallExpression") {
 
                 if (entry.expression.callee.id == null) {
                     stats.wrappedFuncCall++;

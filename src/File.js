@@ -4,6 +4,7 @@ var resolvePath = require("./func/resolvePath.js"),
     fs = require("fs"),
     nextUid = require("metaphorjs/src/func/nextUid.js"),
     Base = require("./Base.js"),
+    toCamelCase = require("metaphorjs/src/func/toCamelCase.js"),
     Import = require("./Import.js");
 
 require("./plugin/file/NodeModule.js");
@@ -85,7 +86,7 @@ var File = Base.$extend({
             name = as[0];
         }
         else {
-            name = path.basename(this.path, ".js");
+            name = toCamelCase(path.basename(this.path, ".js"));
         } 
         if (this.bundle.hasGlobalVar(name) && 
             this.bundle.getGlobalVarOrigin(name) != this.path) {

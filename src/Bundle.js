@@ -111,6 +111,21 @@ var Bundle = Base.$extend({
     },
 
     /**
+     * Get list of global vars
+     * @method
+     * @returns {array}
+     */
+    getGlobalNames: function() {
+        var list = [], k;
+        for (k in this.globals) {
+            if (this.globals.hasOwnProperty(k)) {
+                list.push(k);
+            }
+        }
+        return list;
+    },
+
+    /**
      * Resolve all required files, collect inner bundles
      * @method
      */
@@ -228,6 +243,10 @@ var Bundle = Base.$extend({
             code += self.trigger("code-global", globl, self);
         }
 
+        if (req) {
+            code = self.trigger("code-require", req, self) + code;
+        }
+
         if (wrap) {
             if (ret) {
                 code += self.trigger("code-return", ret, self);
@@ -247,10 +266,6 @@ var Bundle = Base.$extend({
             if (doesExport) {
                 code += self.trigger("code-export", doesExport, self);
             }
-        }
-
-        if (req) {
-            code = self.trigger("code-require", req, self) + code;
         }
 
         if (prepend) {
