@@ -1,11 +1,11 @@
 
-var defineClass = require("metaphorjs-class/src/func/defineClass.js"),
+var cls = require("metaphorjs-class/src/cls.js"),
     copy = require("metaphorjs/src/func/copy.js"),
     isArray = require("metaphorjs/src/func/isArray.js");
 
 require("metaphorjs-observable/src/mixin/Observable.js");
 
-module.exports = defineClass({
+module.exports = cls({
 
     $class: "Base",
     $mixins: ["mixin.Observable"],

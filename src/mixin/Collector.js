@@ -20,10 +20,13 @@ module.exports = ns.register("mixin.Collector", {
     $afterInit: function() {
         // return first === false result and skip the rest of listeners
         this.$$observable.createEvent("collect-filter", false);
+        this.on("collect-filter", this._collectFilter, this);
     },
     
     
-
+    _collectFilter: function(f) {
+        return !this.allOmits[f.path];
+    },
 
     _processMixin: function(mixin, config) {
 

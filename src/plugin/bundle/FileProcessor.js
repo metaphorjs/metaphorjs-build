@@ -18,9 +18,9 @@ module.exports = Base.$extend({
 
     $afterHostInit: function() {
         var self = this;
-        self.host.on("process-file", self.processFileReqs, self);
-        self.host.on("process-file", self.replaceFile, self);
         self.host.on("process-file", self.omitFile, self);
+        self.host.on("process-file", self.replaceFile, self);
+        self.host.on("process-file", self.processFileReqs, self);
     },
 
     processFileReqs: function(file, bundle) {
