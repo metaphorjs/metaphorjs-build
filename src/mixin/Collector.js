@@ -1,15 +1,13 @@
-var ns = require("metaphorjs-namespace/src/var/ns.js"),
-    path = require("path"),
-    File = require("../File.js"),
+var path = require("path"),
+    MetaphorJs = require("metaphorjs/src/MetaphorJs.js"),
     getFileList = require("../func/getFileList.js"),
     resolvePath = require("../func/resolvePath.js"),
-    
     Config = require("../Config.js");
 
 /**
  * @mixin mixin.Collector
  */
-module.exports = ns.register("mixin.Collector", {
+module.exports = MetaphorJs.mixin.Collector = {
 
     $beforeInit: function() {
         this.allOmits = {};
@@ -99,5 +97,5 @@ module.exports = ns.register("mixin.Collector", {
                     }
                 });
         }
-    },
-});
+    }
+};

@@ -1,14 +1,15 @@
 
 var cls = require("metaphorjs-class/src/cls.js"),
     copy = require("metaphorjs/src/func/copy.js"),
-    isArray = require("metaphorjs/src/func/isArray.js");
+    isArray = require("metaphorjs/src/func/isArray.js"),
+    MetaphorJs = require("metaphorjs/src/MetaphorJs.js");
 
 require("metaphorjs-observable/src/mixin/Observable.js");
 
 module.exports = cls({
 
-    $class: "Base",
-    $mixins: ["mixin.Observable"],
+    $class: "MetaphorJs.build.Base",
+    $mixins: [MetaphorJs.mixin.Observable],
 
     $init: function(options) {
         this.options = {};

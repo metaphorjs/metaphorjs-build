@@ -2,7 +2,7 @@ var Base = require("../../Base.js");
 
 module.exports = Base.$extend({
 
-    $class: "plugin.code.Cleanup",
+    $class: "MetaphorJs.plugin.code.Cleanup",
     host: null,
 
     $init: function(host) {

@@ -4,7 +4,7 @@ var ns = require("metaphorjs-namespace/src/var/ns.js");
 /**
  * @mixin mixin.WithImports
  */
-module.exports = ns.register("mixin.WithImports", {
+module.exports = ns.register("mjs.mixin.WithImports", {
 
     imports: null,
     importedBy: null,

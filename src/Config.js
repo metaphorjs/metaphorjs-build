@@ -54,13 +54,12 @@ module.exports = function(){
             }
         },
 
-        getBuildConfig: function(name) {
-
-            var cfg = this.build[name] || this.mixin[name];
+        getModuleConfig: function(type, name) {
+            var cfg = this[type][name] || this.mixin[name];
 
             if (cfg) {
                 if (cfg.extend) {
-                    var base = this.getBuildConfig(cfg.extend);
+                    var base = this.getModuleConfig(type, cfg.extend);
                     cfg = extend({}, base, cfg, true, false);
                     delete cfg.extend;
                 }
@@ -68,6 +67,10 @@ module.exports = function(){
             }
 
             return null;
+        },
+
+        getBuildConfig: function(name) {
+            return this.getModuleConfig("build", name);
         }
     }, {
 

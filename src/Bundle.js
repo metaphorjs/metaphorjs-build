@@ -1,6 +1,7 @@
 
 var Base = require("./Base.js"),
     File = require("./File.js"),
+    MetaphorJs = require("metaphorjs/src/MetaphorJs.js"),
     nextUid = require("metaphorjs/src/func/nextUid.js");
 
 require("./plugin/bundle/FileProcessor.js");
@@ -15,9 +16,9 @@ require("./mixin/Collector.js");
  */
 
 var Bundle = Base.$extend({
-    $class: "Bundle",
-    $mixins: ["mixin.WithImports", 
-                "mixin.Collector"],
+    $class: "MetaphorJs.build.Bundle",
+    $mixins: [MetaphorJs.mixin.WithImports, 
+                MetaphorJs.mixin.Collector],
 
     id: null,
     name: null,
@@ -27,10 +28,10 @@ var Bundle = Base.$extend({
     builder: null,
 
     $constructor: function() {
-        this.$plugins.push("plugin.bundle.FileProcessor");
-        this.$plugins.push("plugin.bundle.NpmProcessor");
-        this.$plugins.push("plugin.bundle.Names");
-        this.$plugins.push("plugin.code.Generator");
+        this.$plugins.push(MetaphorJs.plugin.bundle.FileProcessor);
+        this.$plugins.push(MetaphorJs.plugin.bundle.NpmProcessor);
+        this.$plugins.push(MetaphorJs.plugin.bundle.Names);
+        this.$plugins.push(MetaphorJs.plugin.code.Generator);
 
         this.$super(arguments);
     },
@@ -75,11 +76,26 @@ var Bundle = Base.$extend({
      * @method
      * @param {Config} config
      * @param {string} name Build name
+     * @param {string|object} fromModule {
+     *  build|docs or already extracted mixin
+     *  @default build
+     * }
      */
-    collect: function(config, name) {
+    collect: function(config, name, fromModule) {
+
+        if (!fromModule) {
+            fromModule = "build";
+        }
 
         var self        = this,
-            mixin       = config.getBuildConfig(name);
+            mixin;       
+        
+        if (typeof fromModule === "string") {
+            mixin = config.getModuleConfig(fromModule, name);
+        }
+        else if (fromModule) {
+            mixin = fromModule;
+        }
 
         if (!mixin) {
             throw mixin + " not found in " + config.path;

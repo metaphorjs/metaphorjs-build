@@ -109,7 +109,7 @@ module.exports = Base.$extend({
         if (pipe.length === 0) {
             pipe = ["build", "write"];
         }
-        
+
         pipe.forEach(function(processor){
             if (self["_" + processor]) {
                 self.on("pipe", self["_" + processor], self);

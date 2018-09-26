@@ -5,6 +5,7 @@ var resolvePath = require("./func/resolvePath.js"),
     nextUid = require("metaphorjs/src/func/nextUid.js"),
     Base = require("./Base.js"),
     toCamelCase = require("metaphorjs/src/func/toCamelCase.js"),
+    MetaphorJs = require("metaphorjs/src/MetaphorJs.js"),
     Import = require("./Import.js");
 
 require("./plugin/file/NodeModule.js");
@@ -18,8 +19,8 @@ require("./mixin/WithImports.js");
  */
 var File = Base.$extend({
 
-    $class: "File",
-    $mixins: ["mixin.WithImports"],
+    $class: "MetaphorJs.build.File",
+    $mixins: [MetaphorJs.mixin.WithImports],
 
     id: null,
     path: null,
@@ -27,10 +28,10 @@ var File = Base.$extend({
     builder: null,
 
     $constructor: function() {
-        this.$plugins.push("plugin.file.NodeModule");
-        this.$plugins.push("plugin.code.Cleanup");
-        this.$plugins.push("plugin.code.Info");
-        this.$plugins.push("plugin.code.Generator");
+        this.$plugins.push(MetaphorJs.plugin.file.NodeModule);
+        this.$plugins.push(MetaphorJs.plugin.code.Cleanup);
+        this.$plugins.push(MetaphorJs.plugin.code.Info);
+        this.$plugins.push(MetaphorJs.plugin.code.Generator);
 
         this.$super(arguments);
     },

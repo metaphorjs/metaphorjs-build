@@ -5,7 +5,7 @@ var Base = require("../../Base.js"),
 
 module.exports = Base.$extend({
 
-    $class: "plugin.code.Generator",
+    $class: "MetaphorJs.plugin.code.Generator",
     host: null,
 
     $init: function(host) {

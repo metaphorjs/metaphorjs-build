@@ -1,10 +1,9 @@
 var Base = require("../../Base.js"),
-    File = require("../../File.js"),
-    ns = require("metaphorjs-namespace/src/var/ns.js");
+    File = require("../../File.js");
 
 module.exports = Base.$extend({
 
-    $class: "plugin.bundle.NpmProcessor",
+    $class: "MetaphorJs.plugin.bundle.NpmProcessor",
     host: null,
 
     $init: function(host) {
@@ -14,6 +13,30 @@ module.exports = Base.$extend({
     $afterHostInit: function() {
         var self = this;
         self.host.on("process-file", self.processNpmEntry, self);
+        self.host.on("process-file", self.processNpmMjsEntry, self);
+    },
+
+    processNpmMjsEntry: function(file, bundle) {
+        if (file && file instanceof File) {
+
+            var info = file.getFileInfo();
+
+            if (!info.mjs) {
+                return file;
+            }
+
+            var modVerName = info.mjs.module + "-version";
+
+            if (!bundle.getOption(modVerName)) {
+                bundle.setOption(modVerName, info.mjs.version);
+            }
+            if (bundle.getOption(modVerName) != info.mjs.version) {
+                throw "Got two different versions of " + info.mjs.module + " module: " +
+                    bundle.getOption(modVerName) + " != " + info.mjs.version;
+            }
+        }
+
+        return file;
     },
 
     processNpmEntry: function(file, bundle) {

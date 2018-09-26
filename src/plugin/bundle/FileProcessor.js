@@ -4,7 +4,7 @@ var Base = require("../../Base.js"),
 
 module.exports = Base.$extend({
 
-    $class: "plugin.bundle.FileProcessor",
+    $class: "MetaphorJs.plugin.bundle.FileProcessor",
     host: null,
 
     $constructor: function() {

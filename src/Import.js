@@ -7,7 +7,7 @@ var Base = require("./Base.js"),
  * @class Import
  */
 module.exports = Base.$extend({
-    $class: "Import",
+    $class: "MetaphorJs.build.Import",
 
     id: null,
     type: null,
