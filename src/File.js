@@ -27,6 +27,8 @@ var File = Base.$extend({
     bundle: null,
     builder: null,
 
+    _prepared: false,
+
     $constructor: function() {
         this.$plugins.push(MetaphorJs.plugin.file.NodeModule);
         this.$plugins.push(MetaphorJs.plugin.code.Cleanup);
@@ -209,22 +211,39 @@ var File = Base.$extend({
     getCodeInfo: function(){
         if (!this._codeInfo) {
             this._codeInfo = this.trigger("collect-code-info", 
-                                            this.content || this.getOriginalContent());
+                                    this.content || this.getOriginalContent());
         }
         return this._codeInfo;
     },
 
-    
     /**
-     * Get file content stripped of requires and with all options applied
+     * Pass file content through a function
      * @method
-     * @returns {string}
+     * @param {function} fn {
+     *  @param {string} content
+     *  @param {File} file
+     *  @returns {string} new content
+     * }
+     * @param {object} ctx fn's context
      */
-    getContent: function() {
+    onContent: function(fn, ctx) {
+        this.content = fn.call(ctx, this.content, this);
+    },
 
+    /**
+     * Prepares file content (wrapping, exporting, etc)
+     * @method
+     */
+    prepareForBundling: function() {
         var self = this,
             name = self.getUniqueName(),
             code = self.content;
+
+        if (self._prepared) {
+            return;
+        }
+
+        self._prepared = true;
 
         code = self.trigger("cleanup-code", code);
         code = self.trigger("code-wrapped-imports", self).join("\n") + code;
@@ -237,7 +256,18 @@ var File = Base.$extend({
         code = self.trigger("code-replace-export", code, 
                             self.trigger('decide-module-exports', self));
                     
+
         return self.content = code;
+    },
+    
+    /**
+     * Get file content stripped of requires and with all options applied
+     * @method
+     * @returns {string}
+     */
+    getContent: function() {
+        this.prepareForBundling();
+        return this.content;
     },
 
     /**

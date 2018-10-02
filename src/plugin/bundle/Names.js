@@ -15,6 +15,7 @@ module.exports = Base.$extend({
         var self = this;
         self.host.on("prepare-module-names", self.prepareModuleNames, self);
         self.host.on("prepare-file-names", self.prepareFileNames, self);
+        self.host.on("prepare-file-names", self.flattenNamespace, self);
     },
 
     prepareModuleNames: function(bundle) {
@@ -129,5 +130,46 @@ module.exports = Base.$extend({
                 });
             }
         });
+    },
+
+    flattenNamespace: function(bundle) {
+        var self = this;
+
+
+        bundle.buildList.forEach(function(file) {
+
+            var codeInfo = file.getCodeInfo();
+
+            if (codeInfo.firstIdentifier && 
+                codeInfo.exportsFirstId && 
+                codeInfo.firstIdentifier.indexOf("MetaphorJs.") === 0) {
+
+                var nsName = codeInfo.firstIdentifier,
+                    as = file.getOption("as"),
+                    flatName = self._flattenName(nsName);
+
+                if (as && as.length) {
+                    flatName = as[0];
+                }
+
+                file.getParents().forEach(function(imp){
+                    imp.file.onContent(function(content){
+                        if (content.indexOf(nsName) !== -1) {
+                            // found nsName usage
+                            file.setOption("as", flatName);
+                            while (content.indexOf(nsName) !== -1) {
+                                content = content.replace(nsName, flatName);
+                            }
+                        }
+
+                        return content;
+                    });
+                });
+            }
+        });
+    },
+
+    _flattenName: function(name) {
+        return name.replace('MetaphorJs.', '').replace(/\./g, '_');
     }
 });

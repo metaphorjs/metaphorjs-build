@@ -173,6 +173,8 @@ var Bundle = Base.$extend({
                     }
                 });
             }
+
+            file.prepareForBundling();
         });
 
         self.trigger("build-list-ready", self);

@@ -37,7 +37,8 @@ module.exports = Base.$extend({
                 "statements": 0,
                 "expressions": 0,
                 "exportsAnonymous": false,
-                "exportsFirstId": false
+                "exportsFirstId": false,
+                "exportsWithExpression": false
             },
             typeReg = /(statement|declaration|expression)$/i,
             i, l, entry, j, jl,
@@ -106,6 +107,21 @@ module.exports = Base.$extend({
                         }
                         else if (!stats.firstIdentifier && right.id.name) {
                             stats.firstIdentifier = right.id.name;
+                        }
+                        stats.exportsWithExpression = true;
+                    }
+                    else if (right.type == "CallExpression") {
+                        stats.exportsWithExpression = true;
+                    }
+                    else if (right.type == "AssignmentExpression") {
+                        var rlnames = self._getNames(right.left);
+                        if (rlnames.length && !stats.firstIdentifier) {
+                            stats.firstIdentifier = rlnames[0];
+                            stats.exportsFirstId = true;
+                        }
+                        if (right.right.type == "FunctionExpression" ||
+                            right.right.type == "CallExpression") {
+                            stats.exportsWithExpression = true;
                         }
                     }
                     else if (rnames.length && 
@@ -293,7 +309,7 @@ module.exports = Base.$extend({
                     return {varName: file.getUniqueName()};
                 }
             }
-            else if (info.exportsFirstId) {
+            else if (info.exportsFirstId && !info.exportsWithExpression) {
                 return {removeAll: true};
             }
             else if (info.exportsAnonymous) {
