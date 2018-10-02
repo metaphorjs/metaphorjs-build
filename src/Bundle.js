@@ -1,8 +1,8 @@
 
 var Base = require("./Base.js"),
     File = require("./File.js"),
-    MetaphorJs = require("metaphorjs/src/MetaphorJs.js"),
-    nextUid = require("metaphorjs/src/func/nextUid.js");
+    MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js"),
+    nextUid = require("metaphorjs-shared/src/func/nextUid.js");
 
 require("./plugin/bundle/FileProcessor.js");
 require("./plugin/bundle/NpmProcessor.js");

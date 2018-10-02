@@ -2,7 +2,7 @@
 
 var path            = require("path"),
     fs              = require("fs"),
-    extend          = require("metaphorjs/src/func/extend.js"),
+    extend          = require("metaphorjs-shared/src/func/extend.js"),
     Base            = require("./Base.js");
 
 /**

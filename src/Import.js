@@ -1,7 +1,7 @@
 
 var Base = require("./Base.js"),
-    extend = require("metaphorjs/src/func/extend.js"),
-    nextUid = require("metaphorjs/src/func/nextUid.js");
+    extend = require("metaphorjs-shared/src/func/extend.js"),
+    nextUid = require("metaphorjs-shared/src/func/nextUid.js");
 
 /**
  * @class Import

@@ -2,10 +2,10 @@
 var resolvePath = require("./func/resolvePath.js"),
     path = require("path"),
     fs = require("fs"),
-    nextUid = require("metaphorjs/src/func/nextUid.js"),
+    nextUid = require("metaphorjs-shared/src/func/nextUid.js"),
     Base = require("./Base.js"),
-    toCamelCase = require("metaphorjs/src/func/toCamelCase.js"),
-    MetaphorJs = require("metaphorjs/src/MetaphorJs.js"),
+    toCamelCase = require("metaphorjs-shared/src/func/toCamelCase.js"),
+    MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js"),
     Import = require("./Import.js");
 
 require("./plugin/file/NodeModule.js");
@@ -236,7 +236,7 @@ var File = Base.$extend({
 
         code = self.trigger("code-replace-export", code, 
                             self.trigger('decide-module-exports', self));
-
+                    
         return self.content = code;
     },
 

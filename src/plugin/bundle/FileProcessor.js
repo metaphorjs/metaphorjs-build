@@ -32,7 +32,7 @@ module.exports = Base.$extend({
 
             if (self.bsStack.length > 50) {
                 console.log(self.bsStack);
-                throw "Recursive requirement";
+                throw new Error("Recursive requirement");
             }
 
             file.processReqs();

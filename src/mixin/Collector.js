@@ -1,5 +1,5 @@
 var path = require("path"),
-    MetaphorJs = require("metaphorjs/src/MetaphorJs.js"),
+    MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js"),
     getFileList = require("../func/getFileList.js"),
     resolvePath = require("../func/resolvePath.js"),
     Config = require("../Config.js");
@@ -65,7 +65,7 @@ module.exports = MetaphorJs.mixin.Collector = {
         if (file.match(/^[a-z0-9]+$/i)) {
 
             if (!config.mixin[file]) {
-                throw "Mixin "+file+" not found in " + config.path;
+                throw new Error("Mixin "+file+" not found in " + config.path);
             }
 
             self._processMixin(config.mixin[file], config);
@@ -77,10 +77,10 @@ module.exports = MetaphorJs.mixin.Collector = {
             json = Config.get(resolvePath(file));
 
             if (!json) {
-                throw "Json file not found: " + file;
+                throw new Error("Json file not found: " + file);
             }
             if (!json.mixin[fileDef[1]]) {
-                throw "Mixin "+fileDef[1]+" not found in " + json.path;
+                throw new Error("Mixin "+fileDef[1]+" not found in " + json.path);
             }
 
             self._processMixin(json.mixin[fileDef[1]], json);

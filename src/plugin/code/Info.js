@@ -24,6 +24,7 @@ module.exports = Base.$extend({
     onCollectCodeInfo: function(code) {
         var estree = esprima.parseModule(code),
             body = estree.body,
+            self = this,
             stats = {
                 "module.exports": null,
                 "wrappedFuncCall": 0,
@@ -85,6 +86,15 @@ module.exports = Base.$extend({
                 entry.expression.type == "AssignmentExpression" &&
                 entry.expression.left.type == "MemberExpression") {
 
+                var lnames = self._getNames(entry.expression.left),
+                    rnames = [];
+
+                if (entry.expression.right && 
+                    (entry.expression.right.type == "Identifier" ||
+                    entry.expression.right.type == "MemberExpression")) {
+                    rnames = self._getNames(entry.expression.right);
+                }
+
                 if (entry.expression.left.object.name == "module" &&
                     entry.expression.left.property.name == "exports") {
                     stats['module.exports'] = true; //entry.expression.right;
@@ -98,15 +108,20 @@ module.exports = Base.$extend({
                             stats.firstIdentifier = right.id.name;
                         }
                     }
-                    else if (right.type == "Identifier" && 
-                            right.name == stats.firstIdentifier) {
+                    else if (rnames.length && 
+                            rnames[0] == stats.firstIdentifier) {
                         stats.exportsFirstId = true;
                     }
                     // do not count this one
                     continue;
                 }
+                else {
+                    if (!stats.firstIdentifier && lnames.length) {
+                        stats.firstIdentifier = lnames[0];
+                    }
+                }
 
-                if (entry.expression.left.object.name == stats.firstIdentifier) {
+                if (lnames.length && lnames[0] == stats.firstIdentifier) {
                     stats.firstIdExpression++;
                 }
             }
@@ -265,24 +280,67 @@ module.exports = Base.$extend({
     whatToDoWithEs5Export: function(file) {
         var info = file.getCodeInfo(),
             as = file.getOption("as");
+            
         if (file.needsWrapping()) {
             return {return: true};
         }
         else {
-            if (info.exportsFirstId) {
+            if (as) {
+                if (file.getUniqueName() == info.firstIdentifier) {
+                    return null;
+                }
+                else {
+                    return {varName: file.getUniqueName()};
+                }
+            }
+            else if (info.exportsFirstId) {
                 return {removeAll: true};
             }
             else if (info.exportsAnonymous) {
                 return {varName: file.getUniqueName()};
             }
-            else if (!info.firstIdentifier && as) {
+            /*else if (!info.firstIdentifier) {
                 return {varName: file.getUniqueName()};
-            }
+            }*/
             /*else if (info.exportsAnonymous || !info.firstIdentifier) {
                 return {varName: file.getUniqueName()};
             }*/
         }
         return null;
-    }
+    },
 
+
+
+    _getNames: function(left) {
+        var getObjName = function(obj) {
+                if (obj.name) {
+                    return [obj.name];
+                }
+
+                if (obj.object && obj.property) {
+                    var prop = obj.property,
+                        names = getObjName(obj.object),
+                        name;
+
+                    if ((prop.type != "Identifier" && prop.type != "Literal") || 
+                        !names.length) {
+                        return [];
+                    }
+
+                    name = names[names.length-1];
+                    names.push(name + "." + (prop.name || prop.value));
+
+                    return names;
+                }
+
+                return [];
+            };
+
+        if (left.type == "Identifier") {
+            return [left.name];
+        }
+        else if (left.type == "MemberExpression") {
+            return getObjName(left).reverse();
+        }
+    }
 });

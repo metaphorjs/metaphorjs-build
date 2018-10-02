@@ -12,7 +12,7 @@ module.exports = function(name) {
     var config = Config.getCurrent();
 
     if (!config) {
-        throw "metaphorjs.json not found in current directory!"
+        throw new Error("metaphorjs.json not found in current directory!")
     }
 
     var run = function(name) {

@@ -88,6 +88,7 @@ module.exports = Base.$extend({
                 return code.replace(/module\s*\.exports\s*=\s*[^\s]+\s*;?/, "");        
             }
         }
+
         return code.replace(/module\s*\.exports\s*=\s*/, repl);
     },
 
@@ -214,8 +215,8 @@ module.exports = Base.$extend({
                     name = globlCfg;
                 }
                 else {
-                    name = globlCfg.as;
-                    exposed = globlCfg.name;
+                    name = globlCfg.as || name;
+                    exposed = globlCfg.expose || exposed;
                 }
             }
         }

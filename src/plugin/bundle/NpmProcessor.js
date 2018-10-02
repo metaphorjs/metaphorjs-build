@@ -31,8 +31,8 @@ module.exports = Base.$extend({
                 bundle.setOption(modVerName, info.mjs.version);
             }
             if (bundle.getOption(modVerName) != info.mjs.version) {
-                throw "Got two different versions of " + info.mjs.module + " module: " +
-                    bundle.getOption(modVerName) + " != " + info.mjs.version;
+                throw new Error("Got two different versions of " + info.mjs.module + " module: " +
+                    bundle.getOption(modVerName) + " != " + info.mjs.version);
             }
         }
 
@@ -63,8 +63,8 @@ module.exports = Base.$extend({
             }
 
             if (npmBundle.getOption("version") != info.npm.version) {
-                throw "Got two different versions of " + info.npm.module + " module: " +
-                    npmBundle.getOption("version") + " != " + info.npm.version;
+                throw new Error("Got two different versions of " + info.npm.module + " module: " +
+                    npmBundle.getOption("version") + " != " + info.npm.version);
             }
 
             npmBundle.addFile(file);

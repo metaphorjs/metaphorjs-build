@@ -1,7 +1,7 @@
 
 var fs = require("fs"),
     path = require("path"),
-    isDir = require("metaphorjs/src/func/fs/isDir.js");
+    error = require("metaphorjs-shared/src/func/error.js");
 
 
 /**
@@ -34,7 +34,9 @@ module.exports = function(toResolve, locations, resolveDir) {
             return resolved;
         }
     }
-    catch (thrown) {}
+    catch (thrown) {
+        error(thrown);
+    }
 
     var norm = toResolve,
         inx,
@@ -53,7 +55,7 @@ module.exports = function(toResolve, locations, resolveDir) {
 
     if (abs) {
         if (fs.existsSync(norm)) {
-            if (dirMode || !isDir(norm)) {
+            if (dirMode || !fs.lstatSync(norm).isDirectory()) {
                 return path.normalize(norm) + toResolve.replace(norm, "");
             }
         }
@@ -67,18 +69,11 @@ module.exports = function(toResolve, locations, resolveDir) {
         }
 
         if (fs.existsSync(loc + norm)) {
-            if (dirMode || !isDir(loc + norm)) {
+            if (dirMode || !fs.lstatSync(loc + norm).isDirectory()) {
                 return path.normalize(loc + norm) + toResolve.replace(norm, "");
             }
         }
     }
-
-    /*try {
-        return require.resolve(toResolve);
-    }
-    catch (thrown) {}*/
-
-    
 
     return null;
 };

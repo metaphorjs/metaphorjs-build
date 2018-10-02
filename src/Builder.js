@@ -6,8 +6,8 @@ var fs              = require("fs"),
     Bundle          = require("./Bundle.js"),
     File            = require("./File.js"),
     Config          = require("./Config.js"),
-    nextUid         = require("metaphorjs/src/func/nextUid.js"),
-    isFile          = require("metaphorjs/src/func/fs/isFile.js");
+    lib_Promise     = require("metaphorjs-promise/src/lib/Promise.js"),
+    nextUid         = require("metaphorjs-shared/src/func/nextUid.js");
 
 /**
 * @class Builder
@@ -19,7 +19,7 @@ module.exports = Base.$extend({
      */
     $init: function(buildName, projectFile) {
 
-        if (!isFile(projectFile) && 
+        if (!fs.existsSync(projectFile) && 
             !(projectFile instanceof Config)) {
             throw projectFile + " not found";
         }
@@ -146,7 +146,7 @@ module.exports = Base.$extend({
             code    = res;
         }
 
-        return Promise.resolve(code);
+        return lib_Promise.resolve(code);
     },
 
     _compile: function(code) {
@@ -157,7 +157,7 @@ module.exports = Base.$extend({
 
         console.log("Compiling " + self.buildName);
 
-        promise = new Promise(function(resolve, reject){
+        promise = new lib_Promise(function(resolve, reject){
             process.chdir(bdir);
             
             var target = self.getRandTmpFile(),
@@ -210,7 +210,7 @@ module.exports = Base.$extend({
 
         console.log("Running babel " + self.buildName);
 
-        promise = new Promise(function(resolve, reject){
+        promise = new lib_Promise(function(resolve, reject){
 
             chdir && process.chdir(bdir);
 
@@ -258,7 +258,7 @@ module.exports = Base.$extend({
         fs.writeFileSync(target, code);
         self.trigger("build-written", self, target, code);
 
-        return Promise.resolve(code);
+        return lib_Promise.resolve(code);
     }
 
 

@@ -8,9 +8,7 @@ var fs              = require("fs"),
     Bundle          = require("./Bundle.js"),
     JsonFile        = require("./JsonFile.js"),
 
-    isFile          = require("metaphorjs/src/func/fs/isFile.js"),
-    isArray         = require("metaphorjs/src/func/isArray.js"),
-    trim            = require("metaphorjs/src/func/trim.js"),
+    isArray         = require("metaphorjs-shared/src/func/isArray.js"),
 
     Scope           = require("metaphorjs/src/lib/Scope.js"),
 
@@ -93,7 +91,7 @@ Builder.prototype   = {
 
             tplCfg = self.bld.templates[filePath];
 
-            var tpl = trim(fs.readFileSync(filePath, {encoding: "utf-8"})),
+            var tpl = fs.readFileSync(filePath, {encoding: "utf-8"}).trim(),
                 tplUrl;
 
             if (!tpl) {
