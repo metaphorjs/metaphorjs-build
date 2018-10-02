@@ -1,6 +1,8 @@
 
 var cp = require("child_process"),
-    lib_Promise = require("metaphorjs-promise/src/lib/Promise.js");
+    MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js");
+
+require("metaphorjs-promise/src/lib/Promise.js");
 
 /**
  * @function
@@ -11,7 +13,7 @@ var cp = require("child_process"),
 module.exports = function(cmd, args) {
 
     var proc = cp.spawn(cmd, args),
-        deferred = new lib_Promise(function(resolve, reject){
+        deferred = new MetaphorJs.lib.Promise(function(resolve, reject){
             proc.stdout.pipe(process.stdout);
             proc.stderr.pipe(process.stderr);
             process.stdin.pipe(proc.stdin);
