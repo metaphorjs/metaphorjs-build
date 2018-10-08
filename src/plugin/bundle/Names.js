@@ -154,19 +154,22 @@ module.exports = Base.$extend({
 
                 file.getParents().forEach(function(imp){
                     imp.file.onContent(function(content){
-                        if (content.indexOf(nsName) !== -1) {
-                            // found nsName usage
-                            file.setOption("as", flatName);
-                            while (content.indexOf(nsName) !== -1) {
-                                content = content.replace(nsName, flatName);
-                            }
-                        }
-
-                        return content;
+                        return self._replaceNsNames(content, file, nsName, flatName);
                     });
                 });
             }
         });
+    },
+
+    _replaceNsNames: function(content, file, nsName, flatName){
+        if (content.indexOf(nsName) !== -1) {
+            // found nsName usage
+            file && file.setOption("as", flatName);
+            while (content.indexOf(nsName) !== -1) {
+                content = content.replace(nsName, flatName);
+            }
+        }
+        return content;
     },
 
     _flattenName: function(name) {

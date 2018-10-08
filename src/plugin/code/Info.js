@@ -22,28 +22,34 @@ module.exports = Base.$extend({
     },
 
     onCollectCodeInfo: function(code) {
-        var estree = esprima.parseModule(code),
-            body = estree.body,
-            self = this,
-            stats = {
-                "module.exports": null,
-                "wrappedFuncCall": 0,
-                "rootFuncCall": 0,
-                "total": 0,
-                "firstIdentifier": null,
-                "firstIdType": null,
-                "firstIdExpression": 0,
-                "declarations": 0,
-                "statements": 0,
-                "expressions": 0,
-                "exportsAnonymous": false,
-                "exportsFirstId": false,
-                "exportsWithExpression": false
-            },
-            typeReg = /(statement|declaration|expression)$/i,
-            i, l, entry, j, jl,
-            type, decl, match,
-            statType;
+        try {
+            var estree = esprima.parseModule(code),
+                body = estree.body,
+                self = this,
+                stats = {
+                    "module.exports": null,
+                    "wrappedFuncCall": 0,
+                    "rootFuncCall": 0,
+                    "total": 0,
+                    "firstIdentifier": null,
+                    "firstIdType": null,
+                    "firstIdExpression": 0,
+                    "declarations": 0,
+                    "statements": 0,
+                    "expressions": 0,
+                    "exportsAnonymous": false,
+                    "exportsFirstId": false,
+                    "exportsWithExpression": false
+                },
+                typeReg = /(statement|declaration|expression)$/i,
+                i, l, entry, j, jl,
+                type, decl, match,
+                statType;
+        }
+        catch (e) {
+            console.log("Error parsing " + this.host.path);
+            throw e;
+        }
 
         for (i = 0, l = body.length; i < l; i++) {
             entry = body[i];

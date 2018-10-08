@@ -25,11 +25,7 @@
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "bin": {
-        "mjs-build": "bin/build.js",
-        "mjs-compile": "bin/compile.js",
-        "mjs-publish": "bin/publish.js",
-        "mjs-test": "bin/test.js",
-        "mjs": "bin/mjs.js"
+        "mjs-build": "bin/build.js"
     },
     "devDependencies": {
         "@babel/cli": "^7.1.0",
