@@ -8,9 +8,11 @@ var glob = require("glob");
  * @returns {array}
  */
 module.exports = function(pattern, ext) {
+    if (!pattern) {
+        return [];
+    }
     if (ext && pattern.indexOf("."+ext) != pattern.length - ext.length - 1) {
         pattern += '/*.' + ext;
     }
-
     return glob.sync(pattern);
 };

@@ -10,6 +10,7 @@ var fs = require("fs"),
  * @param {string} toResolve 
  * @param {array} locations 
  * @param {string} resolveDir 
+ * @returns {string}
  */
 module.exports = function(toResolve, locations, resolveDir) {
 
@@ -35,7 +36,7 @@ module.exports = function(toResolve, locations, resolveDir) {
         }
     }
     catch (thrown) {
-        error(thrown);
+        //error(thrown);
     }
 
     var norm = toResolve,

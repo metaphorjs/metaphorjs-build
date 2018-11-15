@@ -182,8 +182,14 @@ module.exports = Base.$extend({
      */
     getFileReqs: function(content) {
 
-        var data = esprima.parseModule(content, {range: true}),
-            reqs = [];
+        try {
+            var data = esprima.parseModule(content, {range: true}),
+                reqs = [];
+        }
+        catch (thrown) {
+            console.log("Error parsing", this.host.path);
+            throw thrown;
+        }
 
         var add = function(name, mod, subprop, range) {
             reqs.push({
