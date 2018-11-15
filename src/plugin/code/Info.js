@@ -126,7 +126,8 @@ module.exports = Base.$extend({
                             stats.exportsFirstId = true;
                         }
                         if (right.right.type == "FunctionExpression" ||
-                            right.right.type == "CallExpression") {
+                            right.right.type == "CallExpression" ||
+                            right.right.type == "ObjectExpression") {
                             stats.exportsWithExpression = true;
                         }
                     }
