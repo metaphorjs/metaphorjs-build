@@ -152,8 +152,8 @@ module.exports = Base.$extend({
                     flatName = as[0];
                 }
 
-                file.getParents().forEach(function(imp){
-                    imp.file.onContent(function(content){
+                file.getParents().forEach(function(imp) {
+                    imp.file.onContent(function(content) {
                         return self._replaceNsNames(content, file, nsName, flatName);
                     });
                 });
@@ -164,9 +164,11 @@ module.exports = Base.$extend({
     _replaceNsNames: function(content, file, nsName, flatName){
         if (content.indexOf(nsName) !== -1) {
             // found nsName usage
+            var nsReg = nsName.replace(/\./g, '\.');
+            nsReg = new RegExp("([^\"'])" + nsName);
             file && file.setOption("as", flatName);
-            while (content.indexOf(nsName) !== -1) {
-                content = content.replace(nsName, flatName);
+            while (content.match(nsReg)) {
+                content = content.replace(nsReg, '$1'+flatName);
             }
         }
         return content;
