@@ -6,7 +6,9 @@ var fs              = require("fs"),
     Base            = require("./Base.js"),
     Bundle          = require("./Bundle.js"),
     File            = require("./File.js"),
+    Template        = require("./Template.js"),
     Config          = require("./Config.js"),
+    extend          = require("metaphorjs-shared/src/func/extend.js"),
     nextUid         = require("metaphorjs-shared/src/func/nextUid.js"),
     MetaphorJs      = require("metaphorjs-shared/src/MetaphorJs.js");
 
@@ -34,6 +36,7 @@ module.exports = Base.$extend({
         });
 
         self.allFiles       = {};
+        self.allTemplates   = {};
         self.allBundles     = {};
 
         self.config         = projectFile instanceof Config ? projectFile : Config.get(projectFile);
@@ -58,6 +61,29 @@ module.exports = Base.$extend({
                 for (var key in options) {
                     if (f.getOption(key) !== null) {
                         f.setOption(key, options[key]);
+                    }
+                }
+            }
+        }
+    
+        return all[filePath];
+    },
+
+    getTemplate: function(filePath, options) {
+        var all = this.allTemplates,
+            opt;
+
+        if (!all[filePath]) {
+            opt = extend(options, Template.getOptions(filePath), true);
+            all[filePath] = new Template(filePath, opt, this);
+        }
+        else {
+            opt = extend(options, Template.getOptions(filePath), true);
+            if (opt) {
+                var f = all[filePath];
+                for (var key in opt) {
+                    if (f.getOption(key) !== null) {
+                        f.setOption(key, opt[key]);
                     }
                 }
             }

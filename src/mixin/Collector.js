@@ -13,6 +13,7 @@ module.exports = MetaphorJs.mixin.Collector = {
         this.allOmits = {};
         this.allReplaces = {};
         this.collected = {};
+        this.collectedTemplates = {};
     },
 
     $afterInit: function() {
@@ -30,6 +31,7 @@ module.exports = MetaphorJs.mixin.Collector = {
 
         var self    = this,
             files   = mixin.files || [],
+            tpls    = mixin.templates || [],
             omit    = mixin.omit || [],
             replace = mixin.replace || [],
             base    = config.base;
@@ -49,6 +51,31 @@ module.exports = MetaphorJs.mixin.Collector = {
         files.forEach(function(file){
             self._processFileItem(file, config);
         });
+
+        tpls.forEach(function(tplFile) {
+            var fpath, opt;
+            if (typeof tplFile === "string") {
+                fpath = tplFile;
+                opt = {};
+            }
+            else {
+                fpath = tplFile[0];
+                opt = tplFile[1];
+            }
+
+            if (opt.base) {
+                opt.base = path.normalize(base +"/"+ opt.base);
+            }
+            else {
+                opt.base = base;
+            }
+
+            getFileList(resolvePath(fpath, [base]), "html")
+                .forEach(function(tplFile){
+                    var t = self.builder.getTemplate(tplFile, opt);
+                    self.collectedTemplates[t.id] = t;
+                });
+        })
     },
 
     _processFileItem: function(fileDef, config){

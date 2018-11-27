@@ -29,6 +29,7 @@ module.exports = Base.$extend({
         host.$$observable.createEvent("code-require", "first");
         host.$$observable.createEvent("code-prepend", "first");
         host.$$observable.createEvent("code-append", "first");
+        host.$$observable.createEvent("code-prebuilt-var", "first");
 
         host.on("code-wrap", self.wrap, self);
         host.on("code-replace-export", self.replaceEs5Export, self);
@@ -44,6 +45,7 @@ module.exports = Base.$extend({
         host.on("code-require", self.requireMods, self);
         host.on("code-prepend", self.addFiles, self);
         host.on("code-append", self.addFiles, self);
+        host.on("code-prebuilt-var", self.generatePrebuilt, self);
     },
 
     wrap: function(code, wrapCfg) {
@@ -295,5 +297,12 @@ module.exports = Base.$extend({
             code += "\n";
         });
         return code;
+    },
+
+    generatePrebuilt: function(prebuiltObj) {
+        if (prebuiltObj) {
+            return "var MetaphorJsPrebuilt = " + JSON.stringify(prebuiltObj);
+        }
+        return "";
     }
 });

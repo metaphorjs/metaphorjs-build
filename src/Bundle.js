@@ -5,8 +5,10 @@ var Base = require("./Base.js"),
     nextUid = require("metaphorjs-shared/src/func/nextUid.js");
 
 require("./plugin/bundle/FileProcessor.js");
+require("./plugin/bundle/TemplateProcessor.js");
 require("./plugin/bundle/NpmProcessor.js");
 require("./plugin/bundle/Names.js");
+require("./plugin/code/Prebuilt.js");
 require("./plugin/code/Generator.js");
 require("./mixin/WithImports.js");
 require("./mixin/Collector.js");
@@ -29,9 +31,11 @@ var Bundle = Base.$extend({
 
     $constructor: function() {
         this.$plugins.push(MetaphorJs.plugin.bundle.FileProcessor);
+        this.$plugins.push(MetaphorJs.plugin.bundle.TemplateProcessor);
         this.$plugins.push(MetaphorJs.plugin.bundle.NpmProcessor);
         this.$plugins.push(MetaphorJs.plugin.bundle.Names);
         this.$plugins.push(MetaphorJs.plugin.code.Generator);
+        this.$plugins.push(MetaphorJs.plugin.code.Prebuilt);
 
         this.$super(arguments);
     },
@@ -49,13 +53,16 @@ var Bundle = Base.$extend({
         self.$super();
 
         self.$$observable.createEvent("process-file", "pipe");  
+        self.$$observable.createEvent("process-template", "pipe");  
 
         self.id = nextUid();
         self.builder = builder;
         self.name = name;
         self.type = type;
         self.buildList = [];
+        self.templateList = [];
         self.included = {};
+        self.templates = {};
         self.globals = {};
 
         self.on("set_expose", self._setArrayOption, self);
@@ -153,6 +160,10 @@ var Bundle = Base.$extend({
             self.addFile(self.collected[path]);
         }
 
+        for (path in self.collectedTemplates) {
+            self.addTemplate(self.collectedTemplates[path]);
+        }
+
         // hoist all module reqs
         // top level only
         self.getImports("module", true, true).forEach(self.addImport, self);
@@ -193,6 +204,22 @@ var Bundle = Base.$extend({
                 self.included[file.id] = true;
                 self.buildList.push(file);
                 file.setBundle(self);
+            }
+        }
+    },
+
+    /**
+     * Add template to the bundle
+     * @param {Template} template 
+     */
+    addTemplate: function(template) {
+        var self = this;
+        if (!self.templates[template.id]) {
+            template = self.trigger("process-template", template, self);
+            if (template && !self.templates[template.id]) {
+                self.templates[template.id] = true;
+                self.templateList.push(template);
+                template.setBundle(self);
             }
         }
     },
@@ -251,7 +278,9 @@ var Bundle = Base.$extend({
         code += '/* BUNDLE START ' + self.id + ' */';
         strict !== false && (code += '\n"use strict";\n');
         code += self.trigger("code-module-imports", self).join("\n");
-        code += this.buildList.join("\n");
+        code += self.trigger("code-prebuilt-var", 
+                    self.trigger("collect-prebuilt"));
+        code += self.buildList.join("\n");
 
         if (expose) {
             code += self.trigger("code-expose", expose, self);
@@ -301,6 +330,12 @@ var Bundle = Base.$extend({
         code += '/* BUNDLE END ' + self.id + ' */';
 
         return code;
+    },
+
+
+
+    _generateTemplates: function() {
+        return "";
     },
 
     /**
