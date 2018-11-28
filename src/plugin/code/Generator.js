@@ -299,10 +299,22 @@ module.exports = Base.$extend({
         return code;
     },
 
-    generatePrebuilt: function(prebuiltObj) {
-        if (prebuiltObj) {
-            return "var MetaphorJsPrebuilt = " + JSON.stringify(prebuiltObj);
+    generatePrebuilt: function(prebuiltObj, funcs) {
+        var code = "";
+
+        code += "\nvar MetaphorJsPrebuilt = " + JSON.stringify(prebuiltObj || {});
+        
+        if (funcs) {
+            var funcsCode = "{\n",
+                funcLines = [];
+            for (var k in funcs) {
+                funcLines.push('"'+k+'": ' + funcs[k]);
+            }
+            funcsCode += funcLines.join(",\n");
+            funcsCode += "\n};\n";
+            code += "\nMetaphorJsPrebuilt['funcs'] = " + funcsCode;
         }
-        return "";
+
+        return code;
     }
 });

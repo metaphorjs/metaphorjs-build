@@ -1,4 +1,6 @@
 
+require("metaphorjs/src/lib/Expression.js");
+
 var fs = require("fs"),
     nextUid = require("metaphorjs-shared/src/func/nextUid.js"),
     Base = require("./Base.js"),
@@ -34,6 +36,7 @@ var Template = Base.$extend({
         self._processed = false;
         self.content    = self.getOriginalContent();
         self.optStr     = "";
+        self.optObj     = null;
         self.id         = id || nextUid();
 
         self.$super(options);
@@ -54,8 +57,9 @@ var Template = Base.$extend({
         var self = this,
             str = Template.getOptionString(self.content);
         if (str) {
-            self.content = self.content.replace(str, "");
+            //self.content = self.content.replace(str, "");
             self.optStr = str;
+            self.optObj = MetaphorJs.lib.Expression.get(str, {});
         }
     },
 

@@ -279,7 +279,9 @@ var Bundle = Base.$extend({
         strict !== false && (code += '\n"use strict";\n');
         code += self.trigger("code-module-imports", self).join("\n");
         code += self.trigger("code-prebuilt-var", 
-                    self.trigger("collect-prebuilt"));
+                    self.trigger("collect-prebuilt"),
+                    self.trigger("collect-prebuilt-funcs"),
+                );
         code += self.buildList.join("\n");
 
         if (expose) {
