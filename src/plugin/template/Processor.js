@@ -10,7 +10,9 @@ var Base = require("../../Base.js"),
     isPlainObject = require("metaphorjs-shared/src/func/isPlainObject.js"),
     jsdom = require("jsdom"),
     extend = require("metaphorjs-shared/src/func/extend.js"),
-    MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js");
+    MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js"),
+    getFileList = require("../../func/getFileList.js"),
+    resolvePath = require("../../func/resolvePath.js");
 
 
 
@@ -63,6 +65,36 @@ var isEmptyObject = function(obj) {
         }
     }
     return true;
+};
+
+var directivesIncluded = false;
+
+var includeDirectives = function(builder) {
+
+    var cfg = builder.config.getBuildConfig(builder.buildName) || {},
+        pb = cfg.prebuild || {},
+        dirs = pb.directives || [];
+
+    if (!global.window) {
+        global.window = {
+            document: {
+                body: {},
+                documentElement: {},
+                createElement: function() {
+                    return {};
+                }
+            }
+        };
+    }
+
+    dirs.forEach(function(path){
+        getFileList(resolvePath(path, [builder.config.base]), "js")
+            .forEach(function(jsFile){
+                require(jsFile);
+            });
+    });
+
+    directivesIncluded = true;
 };
 
 module.exports = Base.$extend({
@@ -153,15 +185,6 @@ module.exports = Base.$extend({
     },
 
 
-    _processExpression: function(expr) {
-        if (MetaphorJs.lib.Expression.isAtom(expr)) {
-
-        }
-        else {
-            return expr;
-        }
-    },
-
 
     extractTexts: function(html) {
 
@@ -173,12 +196,16 @@ module.exports = Base.$extend({
         if (MetaphorJs.lib.Text.applicable(html)) {
             html = MetaphorJs.lib.Text.eachText(html, function(expression) {
                 expression = expression.trim();
-                if (!MetaphorJs.lib.Expression.expressionHasPipes(expression)) {
+                if (expression && 
+                    !MetaphorJs.lib.Expression.expressionHasPipes(expression) &&
+                    !MetaphorJs.lib.Expression.isStatic(expression) &&
+                    expression.indexOf('this.') !== -1) {
+        
                     if (!map[expression]) {
                         id = nextUid();
                         exprs[id] = expression;
                         map[expression] = id;
-                        funcs[expression] = MetaphorJs.lib.Expression.expression(expression, {
+                        funcs[id] = MetaphorJs.lib.Expression.expression(expression, {
                             asCode: true
                         });
                     }
@@ -196,13 +223,21 @@ module.exports = Base.$extend({
 
     extractConfigs: function(html) {
 
+        if (!directivesIncluded) {
+            includeDirectives(this.host.builder);
+        }
+
         var dom = new jsdom.JSDOM(html, { 
                 includeNodeLocations: true 
             }),
             self = this,
             body = dom.window.document.body,
             cfgs = {},
-            dir;
+            dir, key, expr, 
+            exprs = self.host.builder._prebuilt.expressions,
+            map = self.host.builder._prebuilt.exprMap,
+            funcs = self.host.builder._prebuilt.expressionFuncs,
+            dirFn;
 
         walkDom(body, function(node){
             var nodeType = node.nodeType;
@@ -219,9 +254,40 @@ module.exports = Base.$extend({
                     return;
                 }
 
-                for (dir in attrSet.directive) {
-                    delete attrSet.directive[dir].original;
+                if (attrSet.directive) {
+                    for (dir in attrSet.directive) {
+                        delete attrSet.directive[dir].original;
+                        dirFn = MetaphorJs.directive.attr[dir] ||
+                                MetaphorJs.directive.tag[dir];
+                        for (key in attrSet.directive[dir].config) {
+                            expr = attrSet.directive[dir].config[key].expression;
+                            if (expr && 
+                                !MetaphorJs.lib.Expression.expressionHasPipes(expr) &&
+                                !MetaphorJs.lib.Expression.isStatic(expr) &&
+                                expr.indexOf('this.') !== -1 &&
+                                !(dirFn && dirFn.$prebuild && dirFn.$prebuild.skip)) {
+
+                                expr = expr.replace(/[\n\r]/g, '');
+                                expr = expr.replace(/\s+/g, ' ');
+                                //attrSet.directive[dir].config[key].expression = expr;
+
+                                if (!map[expr]) {
+                                    id = nextUid();
+                                    exprs[id] = expr;
+                                    map[expr] = id;
+                                    funcs[id] = MetaphorJs.lib.Expression.expression(expr, {
+                                        asCode: true
+                                    });
+                                    attrSet.directive[dir].config[key].expression = "--"+id;
+                                }
+                                else {
+                                    attrSet.directive[dir].config[key].expression = "--"+map[expr];
+                                }
+                            }
+                        }
+                    }
                 }
+
 
                 var id = nextUid();
                 cfgs[id] = attrSet;

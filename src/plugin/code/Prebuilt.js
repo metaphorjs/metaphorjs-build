@@ -49,8 +49,7 @@ module.exports = Base.$extend({
         return {
             templates: tpls,
             templateOptions: opts,
-            configs: cfgs,
-            expressions: this.host.builder._prebuilt.expressions
+            configs: cfgs
         };
     }
 });
