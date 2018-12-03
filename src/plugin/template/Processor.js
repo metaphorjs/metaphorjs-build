@@ -174,7 +174,7 @@ module.exports = Base.$extend({
 
         host.$$observable.createEvent("prepare", "pipe");
 
-        if (host.builder.config.prebuild) {
+        if (host.builder.config.getBuildConfig(host.builder.buildName).prebuild) {
             host.on("prepare", self.extractConfigs, self);
             host.on("prepare", self.extractOptions, self);
             host.on("prepare", self.extractTexts, self);
@@ -198,8 +198,6 @@ module.exports = Base.$extend({
                 start += self._domShift;
                 end += self._domShift;
 
-                console.log(html.substring(start, end));
-
                 start += name.length;
                 start += 1; // = sign
 
@@ -208,8 +206,6 @@ module.exports = Base.$extend({
                     start += 1;
                     end -= 1;
                 }
-
-                console.log(html.substring(start, end))
 
                 l = end - start;
 
