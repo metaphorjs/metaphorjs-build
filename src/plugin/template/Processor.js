@@ -97,6 +97,55 @@ var includeDirectives = function(builder) {
     directivesIncluded = true;
 };
 
+var processExpression = function(expr, builder, dir, dirFn, attrSet) {
+
+    var exprs = builder._prebuilt.expressions,
+        map = builder._prebuilt.exprMap,
+        funcs = builder._prebuilt.expressionFuncs,
+        opts = builder._prebuilt.expressionOpts,
+        id, o, noReturn;
+
+    if (expr && typeof expr === "string") {
+        expr = expr.replace(/[\n\r]/g, '');
+        expr = expr.replace(/\s+/g, ' ');
+    }
+
+    if (expr && 
+        typeof expr === "string" &&
+        !MetaphorJs.lib.Expression.expressionHasPipes(expr) &&
+        !MetaphorJs.lib.Expression.isStatic(expr) &&
+        expr.indexOf('this.') !== -1 &&
+        !(dirFn && dirFn.$prebuild && dirFn.$prebuild.skip)) {
+
+        noReturn = false;
+
+        if ((dir && attrSet.directive[dir].dtype === "event") || 
+            (dirFn && dirFn.$prebuild && dirFn.$prebuild.noReturn)) {
+            noReturn = true;
+        }
+
+        if (!map[expr]) {
+            id = nextUid();
+
+            o = MetaphorJs.lib.Expression.describeExpression(expr);
+            o && (opts[id] = o);
+
+            exprs[id] = expr;
+            map[expr] = id;
+            funcs[id] = MetaphorJs.lib.Expression.expression(expr, {
+                asCode: true,
+                noReturn: noReturn
+            });
+            return "--" + id;
+        }
+        else {
+            return "--" + map[expr];
+        }
+    }
+
+    return expr;
+};
+
 module.exports = Base.$extend({
 
     $class: "MetaphorJs.plugin.template.Processor",
@@ -119,62 +168,62 @@ module.exports = Base.$extend({
         extend(host.builder._prebuilt, {
             expressions: {},
             expressionFuncs: {},
+            expressionOpts: {},
             exprMap: {}
         }, false, false);
 
         host.$$observable.createEvent("prepare", "pipe");
-        host.on("prepare", self.extractConfigs, self);
-        host.on("prepare", self.extractOptions, self);
-        host.on("prepare", self.extractTexts, self);
+
+        if (host.builder.config.prebuild) {
+            host.on("prepare", self.extractConfigs, self);
+            host.on("prepare", self.extractOptions, self);
+            host.on("prepare", self.extractTexts, self);
+        }
+
         host.on("prepare", self.minify, self);
     },
 
-    _removeDirectives: function(html, dom, node, id) {
-
-        var name, fc, l, start, end,
-            self = this,
+    _removeDirective: function(html, dom, node, attr, exprId) {
+        var self = this,
             loc = dom.nodeLocation(node),
-            firstStart = null,
-            idTag = " mjs=" + id,
-            idtl = idTag.length,
-            spacel = 0;
+            name, attrLoc, l, start, end, q,
+            idl = exprId.length;
 
         for (name in loc.attrs) {
-            fc = name.substr(0,1);
-            if (fc === '{' || fc === '(' || fc === '[' ||
-                fc === '#' ||
-                name.substr(0,4) === 'mjs-') {
-                start = loc.attrs[name].startOffset + self._domShift;
-                end = loc.attrs[name].endOffset + self._domShift;
+            if (name === attr) {
+
+                attrLoc = loc.attrs[name];
+                start = attrLoc.startOffset;
+                end = attrLoc.endOffset;
+                start += self._domShift;
+                end += self._domShift;
+
+                console.log(html.substring(start, end));
+
+                start += name.length;
+                start += 1; // = sign
+
+                q = html.substring(start, start+1);
+                if (q === '"' || q === '"') {
+                    start += 1;
+                    end -= 1;
+                }
+
+                console.log(html.substring(start, end))
+
                 l = end - start;
-                firstStart === null && (firstStart = start);
-                spacel += l;
 
                 html = html.substring(0, start) +
-                        (new Array(l + 1)).join(" ") + 
+                        exprId + 
                         html.substring(end);
-            }
-        }
 
-        if (firstStart !== null) {
-            // if length of removed attributes is bigger than
-            // of the id tag
-            if (spacel >= idtl) {
-                html = html.substring(0, firstStart) + 
-                        idTag +
-                        html.substring(firstStart + idtl);
-            }
-            // otherwise, we add idtl to domShift (position shift)
-            else {
-                html = html.substring(0, firstStart) + 
-                        idTag +
-                        html.substring(firstStart);
-                self._domShift += idtl;
+                self._domShift += (idl - l);
             }
         }
 
         return html;
     },
+
 
     extractOptions: function(html) {
         if (html.substr(0,5) === '<!--{') {
@@ -185,36 +234,14 @@ module.exports = Base.$extend({
     },
 
 
-
     extractTexts: function(html) {
 
-        var exprs = this.host.builder._prebuilt.expressions,
-            map = this.host.builder._prebuilt.exprMap,
-            funcs = this.host.builder._prebuilt.expressionFuncs,
-            id;
+        var self = this;
 
         if (MetaphorJs.lib.Text.applicable(html)) {
             html = MetaphorJs.lib.Text.eachText(html, function(expression) {
-                expression = expression.trim();
-                if (expression && 
-                    !MetaphorJs.lib.Expression.expressionHasPipes(expression) &&
-                    !MetaphorJs.lib.Expression.isStatic(expression) &&
-                    expression.indexOf('this.') !== -1) {
-        
-                    if (!map[expression]) {
-                        id = nextUid();
-                        exprs[id] = expression;
-                        map[expression] = id;
-                        funcs[id] = MetaphorJs.lib.Expression.expression(expression, {
-                            asCode: true
-                        });
-                    }
-                    else {
-                        id = map[expression];
-                    }
-                    return '{{--' + id + '}}';
-                }
-                return '{{'+expression+'}}';
+                expression = processExpression(expression.trim(), self.host.builder);
+                return '{{' + expression + '}}';
             });
         }
 
@@ -234,69 +261,47 @@ module.exports = Base.$extend({
             body = dom.window.document.body,
             cfgs = {},
             dir, key, expr, 
-            exprs = self.host.builder._prebuilt.expressions,
-            map = self.host.builder._prebuilt.exprMap,
-            funcs = self.host.builder._prebuilt.expressionFuncs,
             dirFn;
 
-        walkDom(body, function(node){
-            var nodeType = node.nodeType;
+        walkDom(body, function(node) {
+            var nodeType = node.nodeType,
+                id;
 
             if (nodeType === 1) {
 
                 var attrSet = MetaphorJs.dom.getAttrSet(node);
-                delete attrSet.removeDirective;
-                delete attrSet.rest;
-                delete attrSet.names;
-
-                deflate(attrSet);
-                if (isEmptyObject(attrSet)) {
-                    return;
-                }
 
                 if (attrSet.directive) {
                     for (dir in attrSet.directive) {
-                        delete attrSet.directive[dir].original;
+
                         dirFn = MetaphorJs.directive.attr[dir] ||
                                 MetaphorJs.directive.tag[dir];
+
                         for (key in attrSet.directive[dir].config) {
                             expr = attrSet.directive[dir].config[key].expression;
-                            if (expr && 
-                                !MetaphorJs.lib.Expression.expressionHasPipes(expr) &&
-                                !MetaphorJs.lib.Expression.isStatic(expr) &&
-                                expr.indexOf('this.') !== -1 &&
-                                !(dirFn && dirFn.$prebuild && dirFn.$prebuild.skip)) {
+                            attrSet.directive[dir].config[key].expression = 
+                                processExpression(
+                                    expr, self.host.builder, dir, dirFn, attrSet
+                                );
 
-                                expr = expr.replace(/[\n\r]/g, '');
-                                expr = expr.replace(/\s+/g, ' ');
-                                //attrSet.directive[dir].config[key].expression = expr;
-
-                                if (!map[expr]) {
-                                    id = nextUid();
-                                    exprs[id] = expr;
-                                    map[expr] = id;
-                                    funcs[id] = MetaphorJs.lib.Expression.expression(expr, {
-                                        asCode: true
-                                    });
-                                    attrSet.directive[dir].config[key].expression = "--"+id;
-                                }
-                                else {
-                                    attrSet.directive[dir].config[key].expression = "--"+map[expr];
-                                }
+                            if (MetaphorJs.lib.Expression.isPrebuiltKey(
+                                attrSet.directive[dir].config[key].expression)) {
+    
+                                html = self._removeDirective(
+                                    html, dom, node,
+                                    attrSet.directive[dir].config[key].original,
+                                    attrSet.directive[dir].config[key].expression
+                                );
                             }
                         }
                     }
                 }
 
-
-                var id = nextUid();
+                id = nextUid();
                 cfgs[id] = attrSet;
 
-                html = self._removeDirectives(html, dom, node, id);
             }
         });
-
-        self.host._prebuilt.configs = cfgs;
 
         return html;
     },

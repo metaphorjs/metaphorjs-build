@@ -17,7 +17,8 @@ module.exports = Base.$extend({
         host.builder._prebuilt = host.builder._prebuilt || {};
         extend(host.builder._prebuilt, {
             expressions: {},
-            expressionFuncs: {}
+            expressionFuncs: {},
+            expressionOpts: {}
         }, false, false);
 
         host.$$observable.createEvent("collect-prebuilt", "merge");
@@ -49,7 +50,8 @@ module.exports = Base.$extend({
         return {
             templates: tpls,
             templateOptions: opts,
-            configs: cfgs
+            //configs: cfgs,
+            expressionOpts: this.host.builder._prebuilt.expressionOpts
         };
     }
 });
