@@ -28,7 +28,7 @@ var Template = Base.$extend({
 
         if (!id) {
             id = filePath.replace(options.base + "/", "");
-            id = id.replace(".html", "");
+            //id = id.replace(".html", "");
         }
 
         self.builder    = builder;
