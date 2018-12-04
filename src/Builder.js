@@ -1,4 +1,5 @@
 require("metaphorjs-promise/src/lib/Promise.js");
+require("./plugin/builder/Cleanup.js")
 
 var fs              = require("fs"),
     path            = require("path"),
@@ -16,6 +17,11 @@ var fs              = require("fs"),
 * @class Builder
 */
 module.exports = Base.$extend({
+
+    $constructor: function() {
+        this.$plugins.push(MetaphorJs.plugin.builder.Cleanup);
+        this.$super(arguments);
+    },
 
     /**
      * @constructor
@@ -167,6 +173,7 @@ module.exports = Base.$extend({
         self.trigger("after-build-list", self);
 
         code        = self.bundle.getContent();
+        code        = self.trigger("cleanup", code, self);
         var res     = self.trigger("build-ready", self, code);
 
         if (typeof res === "string") {
