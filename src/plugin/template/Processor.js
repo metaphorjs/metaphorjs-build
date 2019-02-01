@@ -263,7 +263,7 @@ module.exports = Base.$extend({
             var nodeType = node.nodeType,
                 id;
 
-            if (nodeType === 1) {
+            if (nodeType === dom.window.document.ELEMENT_NODE) {
 
                 var attrSet = MetaphorJs.dom.getAttrSet(node);
 
