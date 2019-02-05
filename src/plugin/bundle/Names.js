@@ -93,7 +93,6 @@ module.exports = Base.$extend({
                         // everything is ok
                         if (!bundle.globals.hasOwnProperty(name) ||
                             bundle.globals[name] == file.path) {
-                                
                             bundle.globals[name] = file.path;
                             !firstGlobal && (firstGlobal = name);
                             file.setOption("as", name);   
@@ -162,13 +161,14 @@ module.exports = Base.$extend({
     },
 
     _replaceNsNames: function(content, file, nsName, flatName){
+        
         if (content.indexOf(nsName) !== -1) {
             // found nsName usage
             var nsReg = nsName.replace(/\./g, '\.');
-            nsReg = new RegExp("([^\"'])" + nsName);
+            nsReg = new RegExp("([^\"'])" + nsName + "([\s(\.\[])");
             file && file.setOption("as", flatName);
             while (content.match(nsReg)) {
-                content = content.replace(nsReg, '$1'+flatName);
+                content = content.replace(nsReg, '$1'+flatName+"$2");
             }
         }
         return content;
