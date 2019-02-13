@@ -64,6 +64,7 @@ module.exports = MetaphorJs.mixin.Collector = {
             }
 
             if (opt.base) {
+                opt.origBase = opt.base;
                 opt.base = path.normalize(base +"/"+ opt.base);
             }
             else {
@@ -72,6 +73,9 @@ module.exports = MetaphorJs.mixin.Collector = {
 
             getFileList(resolvePath(fpath, [base]), "html")
                 .forEach(function(tplFile){
+                    if (opt.base && tplFile.indexOf(opt.base) === -1) {
+                        opt.base = resolvePath(opt.origBase, [base], true);
+                    }
                     var t = self.builder.getTemplate(tplFile, opt);
                     self.collectedTemplates[t.id] = t;
                 });

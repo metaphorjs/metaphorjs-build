@@ -285,7 +285,7 @@ module.exports = Base.$extend({
     
                                 html = self._removeDirective(
                                     html, dom, node,
-                                    attrSet.directive[dir].config[key].original,
+                                    attrSet.directive[dir].config[key].attr,
                                     attrSet.directive[dir].config[key].expression
                                 );
                             }

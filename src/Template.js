@@ -27,6 +27,7 @@ var Template = Base.$extend({
             id = options.id || null;
 
         if (!id) {
+            
             id = filePath.replace(options.base + "/", "");
             //id = id.replace(".html", "");
         }
