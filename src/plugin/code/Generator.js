@@ -1,6 +1,8 @@
 var Base = require("../../Base.js"),
+    obj2code = require("../../func/obj2code.js"),
     path = require("path"),
-    fs = require("fs");
+    fs = require("fs"),
+    MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js");
     
 
 module.exports = Base.$extend({
@@ -299,21 +301,26 @@ module.exports = Base.$extend({
         return code;
     },
 
-    generatePrebuilt: function(prebuiltObj, funcs) {
+    generatePrebuilt: function() {
         var code = "";
 
-        code += "\nvar MetaphorJsPrebuilt = " + JSON.stringify(prebuiltObj || {});
-        
-        if (funcs) {
+        code += "\nvar MetaphorJsPrebuilt = " + 
+                    obj2code(MetaphorJs.app.prebuilt.getStorage());
+
+        code = code.replace(/("~[^"]+~":)/g, "\n$1");
+
+        /*if (funcs) {
             var funcsCode = "{\n",
-                funcLines = [];
-            for (var k in funcs) {
-                funcLines.push('"'+k+'": ' + funcs[k]);
+                funcLines = [],
+                k;
+
+            for (k in funcs) {
+                funcLines.push('"'+k+'": ' + obj2code(funcs[k]));
             }
             funcsCode += funcLines.join(",\n");
             funcsCode += "\n};\n";
             code += "\nMetaphorJsPrebuilt['funcs'] = " + funcsCode;
-        }
+        }*/
 
         return code;
     }

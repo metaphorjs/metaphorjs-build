@@ -275,13 +275,12 @@ var Bundle = Base.$extend({
             req = self.getOption("require"),
             doesExport = self.getOption("exports");
 
+        self.trigger("prepare-prebuilt");
+
         code += '/* BUNDLE START ' + self.id + ' */';
         strict !== false && (code += '\n"use strict";\n');
         code += self.trigger("code-module-imports", self).join("\n");
-        code += self.trigger("code-prebuilt-var", 
-                    self.trigger("collect-prebuilt"),
-                    self.trigger("collect-prebuilt-funcs"),
-                );
+        code += self.trigger("code-prebuilt-var");
         code += self.buildList.join("\n");
 
         if (expose) {

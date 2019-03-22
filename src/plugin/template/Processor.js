@@ -2,10 +2,14 @@
 require("metaphorjs/src/func/dom/getAttrSet.js");
 require("metaphorjs/src/lib/Text.js");
 require("metaphorjs/src/lib/Expression.js");
+require("metaphorjs/src/lib/Config.js");
+require("metaphorjs/src/app/Directive.js");
+require("metaphorjs/src/func/app/prebuilt.js");
 
 var Base = require("../../Base.js"),
     minify = require('html-minifier').minify,
     toArray = require("metaphorjs-shared/src/func/toArray.js"),
+    isArray = require("metaphorjs-shared/src/func/isArray.js"),
     nextUid = require("metaphorjs-shared/src/func/nextUid.js"),
     isPlainObject = require("metaphorjs-shared/src/func/isPlainObject.js"),
     jsdom = require("jsdom"),
@@ -57,17 +61,8 @@ var deflate = function(obj) {
     return [cnt, obj];
 };
 
-var isEmptyObject = function(obj) {
-    var k;
-    for (k in obj) {
-        if (obj.hasOwnProperty(k)) {
-            return false;
-        }
-    }
-    return true;
-};
-
 var directivesIncluded = false;
+var filtersIncluded = false;
 
 var includeDirectives = function(builder) {
 
@@ -97,54 +92,22 @@ var includeDirectives = function(builder) {
     directivesIncluded = true;
 };
 
-var processExpression = function(expr, builder, dir, dirFn, attrSet) {
+var includeFilters = function(builder) {
+    var cfg = builder.config.getBuildConfig(builder.buildName) || {},
+        pb = cfg.prebuild || {},
+        filters = pb.filters || [];
 
-    var exprs = builder._prebuilt.expressions,
-        map = builder._prebuilt.exprMap,
-        funcs = builder._prebuilt.expressionFuncs,
-        opts = builder._prebuilt.expressionOpts,
-        id, o, noReturn;
-
-    if (expr && typeof expr === "string") {
-        expr = expr.replace(/[\n\r]/g, '');
-        expr = expr.replace(/\s+/g, ' ');
-    }
-
-    if (expr && 
-        typeof expr === "string" &&
-        !MetaphorJs.lib.Expression.expressionHasPipes(expr) &&
-        !MetaphorJs.lib.Expression.isStatic(expr) &&
-        expr.indexOf('this.') !== -1 &&
-        !(dirFn && dirFn.$prebuild && dirFn.$prebuild.skip)) {
-
-        noReturn = false;
-
-        if ((dir && attrSet.directive[dir].dtype === "event") || 
-            (dirFn && dirFn.$prebuild && dirFn.$prebuild.noReturn)) {
-            noReturn = true;
-        }
-
-        if (!map[expr]) {
-            id = nextUid();
-
-            o = MetaphorJs.lib.Expression.describeExpression(expr);
-            o && (opts[id] = o);
-
-            exprs[id] = expr;
-            map[expr] = id;
-            funcs[id] = MetaphorJs.lib.Expression.expression(expr, {
-                asCode: true,
-                noReturn: noReturn
+    filters.forEach(function(path){
+        getFileList(resolvePath(path, [builder.config.base]), "js")
+            .forEach(function(jsFile){
+                require(jsFile);
             });
-            return "--" + id;
-        }
-        else {
-            return "--" + map[expr];
-        }
-    }
+    });
 
-    return expr;
+    filtersIncluded = true;
 };
+
+
 
 module.exports = Base.$extend({
 
@@ -160,24 +123,15 @@ module.exports = Base.$extend({
         var self = this,
             host = self.host;
 
-        host._prebuilt = {
-            configs: {}
-        };
-
         host.builder._prebuilt = host.builder._prebuilt || {};
-        extend(host.builder._prebuilt, {
-            expressions: {},
-            expressionFuncs: {},
-            expressionOpts: {},
-            exprMap: {}
-        }, false, false);
+        MetaphorJs.app.prebuilt.setStorage(host.builder._prebuilt);
 
         host.$$observable.createEvent("prepare", "pipe");
 
         if (host.builder.config.getBuildConfig(host.builder.buildName).prebuild) {
             host.on("prepare", self.extractConfigs, self);
-            host.on("prepare", self.extractOptions, self);
-            host.on("prepare", self.extractTexts, self);
+            //host.on("prepare", self.extractOptions, self);
+            //host.on("prepare", self.extractTexts, self);
         }
 
         host.on("prepare", self.minify, self);
@@ -246,9 +200,8 @@ module.exports = Base.$extend({
 
     extractConfigs: function(html) {
 
-        if (!directivesIncluded) {
-            includeDirectives(this.host.builder);
-        }
+        !directivesIncluded && includeDirectives(this.host.builder);
+        !filtersIncluded && includeFilters(this.host.builder);
 
         var dom = new jsdom.JSDOM(html, { 
                 includeNodeLocations: true 
@@ -257,38 +210,63 @@ module.exports = Base.$extend({
             body = dom.window.document.body,
             cfgs = {},
             dir, key, expr, 
+            dirs, i, l, dirCfg,
             dirFn;
 
         walkDom(body, function(node) {
             var nodeType = node.nodeType,
-                id;
+                id,
+                config;
 
             if (nodeType === dom.window.document.ELEMENT_NODE) {
 
                 var attrSet = MetaphorJs.dom.getAttrSet(node);
 
-                if (attrSet.directive) {
-                    for (dir in attrSet.directive) {
+                if (attrSet.directives) {
+                    for (dir in attrSet.directives) {
 
                         dirFn = MetaphorJs.directive.attr[dir] ||
                                 MetaphorJs.directive.tag[dir];
 
-                        for (key in attrSet.directive[dir].config) {
-                            expr = attrSet.directive[dir].config[key].expression;
-                            attrSet.directive[dir].config[key].expression = 
-                                processExpression(
-                                    expr, self.host.builder, dir, dirFn, attrSet
+                        dirs = attrSet.directives[dir];
+
+                        if (!dirFn) {
+                            console.log("Directive not found: ", dir);
+                            continue;
+                        }
+
+                        for (i = 0, l = dirs.length; i < l; i++) {
+
+                            dirCfg = dirs[i];
+                            config = new MetaphorJs.lib.Config(dirCfg, {
+                                scope: {}
+                            });
+
+                            MetaphorJs.app.Directive.initConfig(config);
+                            dirFn.initConfig && dirFn.initConfig(config);
+                            dirFn.deepInitConfig && dirFn.deepInitConfig(config);
+
+                            config.eachProperty(function(key){
+                                var prop = config.getProperty(key),
+                                    mode = prop.mode || prop.defaultMode,
+                                    expr = prop.expression,
+                                    descr;
+
+                                if (!expr || expr === true ||
+                                    mode === MetaphorJs.lib.Config.MODE_STATIC) {
+                                    return;
+                                }
+
+                                id = MetaphorJs.app.prebuilt.add(
+                                    "config", 
+                                    config.storeAsCode(key)
                                 );
 
-                            if (MetaphorJs.lib.Expression.isPrebuiltKey(
-                                attrSet.directive[dir].config[key].expression)) {
-    
                                 html = self._removeDirective(
                                     html, dom, node,
-                                    attrSet.directive[dir].config[key].attr,
-                                    attrSet.directive[dir].config[key].expression
+                                    dirCfg[key].attr, id
                                 );
-                            }
+                            });
                         }
                     }
                 }
