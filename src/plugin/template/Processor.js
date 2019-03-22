@@ -19,6 +19,21 @@ var Base = require("../../Base.js"),
     resolvePath = require("../../func/resolvePath.js");
 
 
+var clearPipes = function(struct) {
+    var i, l;
+    if (struct.pipes) {
+        for (i = 0, l = struct.pipes.length; i < l; i++) {
+            delete struct.pipes[i].fn;
+        }
+    }
+    if (struct.inputPipes) {
+        for (i = 0, l = struct.inputPipes.length; i < l; i++) {
+            delete struct.inputPipes[i].fn;
+        }
+    }
+    return struct;
+};
+
 
 var walkDom = function(node, fn) {
 
@@ -131,7 +146,7 @@ module.exports = Base.$extend({
         if (host.builder.config.getBuildConfig(host.builder.buildName).prebuild) {
             host.on("prepare", self.extractConfigs, self);
             //host.on("prepare", self.extractOptions, self);
-            //host.on("prepare", self.extractTexts, self);
+            host.on("prepare", self.extractTexts, self);
         }
 
         host.on("prepare", self.minify, self);
@@ -175,23 +190,32 @@ module.exports = Base.$extend({
     },
 
 
-    extractOptions: function(html) {
+    /*extractOptions: function(html) {
         if (html.substr(0,5) === '<!--{') {
             var inx = html.indexOf('-->');
             return html.substring(inx + 3);
         }
         return html;
-    },
+    },*/
+
 
 
     extractTexts: function(html) {
 
         var self = this;
 
+        !filtersIncluded && includeFilters(this.host.builder);
+
         if (MetaphorJs.lib.Text.applicable(html)) {
             html = MetaphorJs.lib.Text.eachText(html, function(expression) {
-                expression = processExpression(expression.trim(), self.host.builder);
-                return '{{' + expression + '}}';
+                var struct = MetaphorJs.lib.Expression.deconstruct(
+                    expression
+                );
+                var id = MetaphorJs.app.prebuilt.add(
+                    "config", 
+                    clearPipes(struct)
+                );
+                return '{{' + id + '}}';
             });
         }
 
@@ -259,7 +283,7 @@ module.exports = Base.$extend({
 
                                 id = MetaphorJs.app.prebuilt.add(
                                     "config", 
-                                    config.storeAsCode(key)
+                                    clearPipes(config.storeAsCode(key))
                                 );
 
                                 html = self._removeDirective(
@@ -267,6 +291,30 @@ module.exports = Base.$extend({
                                     dirCfg[key].attr, id
                                 );
                             });
+                        }
+                    }
+                }
+
+                if (attrSet.attributes) {
+
+                    for (key in attrSet.attributes) {
+
+                        expr = attrSet.attributes[key];
+
+                        if (!MetaphorJs.lib.Text.applicable(expr)) {
+                            id = MetaphorJs.app.prebuilt.add(
+                                "config", 
+                                clearPipes(
+                                    MetaphorJs.lib.Expression.deconstruct(
+                                        expr
+                                    )
+                                )
+                            );
+
+                            html = self._removeDirective(
+                                html, dom, node,
+                                attrSet.__attributes[key], id
+                            );
                         }
                     }
                 }
