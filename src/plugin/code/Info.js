@@ -12,7 +12,7 @@ module.exports = Base.$extend({
     $init: function(host) {
         this.host = host;
     },
-    
+
     $afterHostInit: function() {
         var self = this;
         self.host.on("collect-code-info", self.onCollectCodeInfo, self);
@@ -23,7 +23,7 @@ module.exports = Base.$extend({
 
     onCollectCodeInfo: function(code) {
         try {
-            var estree = esprima.parseModule(code),
+            var estree = esprima.parseModule(code, { tolerant: true }),
                 body = estree.body,
                 self = this,
                 stats = {
