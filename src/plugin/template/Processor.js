@@ -9,11 +9,9 @@ require("metaphorjs/src/func/app/prebuilt.js");
 var Base = require("../../Base.js"),
     minify = require('html-minifier').minify,
     toArray = require("metaphorjs-shared/src/func/toArray.js"),
-    isArray = require("metaphorjs-shared/src/func/isArray.js"),
     nextUid = require("metaphorjs-shared/src/func/nextUid.js"),
     isPlainObject = require("metaphorjs-shared/src/func/isPlainObject.js"),
     jsdom = require("jsdom"),
-    extend = require("metaphorjs-shared/src/func/extend.js"),
     MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js"),
     getFileList = require("../../func/getFileList.js"),
     resolvePath = require("../../func/resolvePath.js");
@@ -158,23 +156,40 @@ module.exports = Base.$extend({
             name, attrLoc, l, start, end, q,
             idl = exprId.length;
 
+        console.log("remove directive", attr)
+        //console.log(loc.attrs)
+
         for (name in loc.attrs) {
             if (name === attr) {
 
                 attrLoc = loc.attrs[name];
                 start = attrLoc.startOffset;
                 end = attrLoc.endOffset;
+
                 start += self._domShift;
                 end += self._domShift;
+
+                //console.log("name: ", name, exprId)
+                // JSDOM bugfix
+                var fix;
+                if (name[0] === '[' && 
+                    (fix = html.substring(start).indexOf(name)) !== 0) {
+                    start += fix;
+                    end += fix;
+                    //console.log("full2: ", html.substring(start, end))
+                }
 
                 start += name.length;
                 start += 1; // = sign
 
                 q = html.substring(start, start+1);
+
                 if (q === '"' || q === '"') {
                     start += 1;
                     end -= 1;
                 }
+
+                //console.log("value: ", html.substring(start, end))
 
                 l = end - start;
 
@@ -246,6 +261,8 @@ module.exports = Base.$extend({
 
                 var attrSet = MetaphorJs.dom.getAttrSet(node);
 
+                //console.log(attrSet.directives)
+
                 if (attrSet.directives) {
                     for (dir in attrSet.directives) {
 
@@ -270,7 +287,7 @@ module.exports = Base.$extend({
                             dirFn.initConfig && dirFn.initConfig(config);
                             dirFn.deepInitConfig && dirFn.deepInitConfig(config);
 
-                            config.eachProperty(function(key){
+                            config.eachProperty(function(key) {
                                 var prop = config.getProperty(key),
                                     mode = prop.mode || prop.defaultMode,
                                     expr = prop.expression,
