@@ -156,7 +156,7 @@ module.exports = Base.$extend({
             name, attrLoc, l, start, end, q,
             idl = exprId.length;
 
-        console.log("remove directive", attr)
+        //console.log("remove directive", attr)
         //console.log(loc.attrs)
 
         for (name in loc.attrs) {
