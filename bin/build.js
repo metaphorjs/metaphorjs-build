@@ -4,18 +4,15 @@ var args = require("minimist")(process.argv.slice(2), {
     boolean: true
 });
 
-if (process.env['METAPHORJS_DEV'] || args.dev) {
-    require("../../metaphorjs/dev/mockery.js");
-}
+var build;
 
-if (args.all) {
-    require("./../dist/metaphorjs.build.js")
-        .Builder
-        .buildAll(args.auto || false);
+if (process.env['METAPHORJS_DEV'] || args.dev) {
+    require("../../metaphorjs/dev/env.js");
+    build = require("../src/func/build.js");
+    
 }
 else {
-
-    require("./../dist/metaphorjs.build.js")
-        .Builder
-        .build(args._[0], args._[1]);
+    build = require("./../dist/metaphorjs.build.js").build;
 }
+
+build(args._[0]);

@@ -2,7 +2,7 @@
 module.exports = function(grunt) {
 
     if (process.env['METAPHORJS_DEV']) {
-        require("../../metaphorjs/dev/mockery.js");
+        require("../../metaphorjs/dev/env.js");
     }
 
     grunt.registerMultiTask("mjs-build", function(){

@@ -1,34 +1,35 @@
 
 var cp = require("child_process"),
-    Promise = require("metaphorjs-promise/src/lib/Promise.js");
+    MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js");
+
+require("metaphorjs-promise/src/lib/Promise.js");
 
 /**
- * @param cmd
- * @param args
+ * @function
+ * @param {string} cmd
+ * @param {string} args
  * @returns {Promise}
  */
 module.exports = function(cmd, args) {
 
-
     var proc = cp.spawn(cmd, args),
-        deferred = new Promise;
+        deferred = new MetaphorJs.lib.Promise(function(resolve, reject){
+            proc.stdout.pipe(process.stdout);
+            proc.stderr.pipe(process.stderr);
+            process.stdin.pipe(proc.stdin);
 
-    proc.stdout.pipe(process.stdout);
-    proc.stderr.pipe(process.stderr);
-    process.stdin.pipe(proc.stdin);
+            proc.on("exit", function(code) {
 
-    proc.on("exit", function(code) {
+                process.stdin.unpipe(proc.stdin);
 
-        process.stdin.unpipe(proc.stdin);
-
-        if (code == 0) {
-            deferred.resolve();
-        }
-        else {
-            deferred.reject(code);
-        }
-    });
-
+                if (code == 0) {
+                    resolve();
+                }
+                else {
+                    reject(code);
+                }
+            });
+        });
 
     return deferred;
 };

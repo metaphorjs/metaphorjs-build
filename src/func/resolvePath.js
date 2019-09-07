@@ -1,16 +1,21 @@
 
 var fs = require("fs"),
     path = require("path"),
-    isDir = require("metaphorjs/src/func/fs/isDir.js");
+    error = require("metaphorjs-shared/src/func/error.js");
 
+
+/**
+ * Resolve path or file pattern to an asbolute path or file pattern
+ * @function
+ * @param {string} toResolve 
+ * @param {array} locations 
+ * @param {string} resolveDir 
+ * @returns {string}
+ */
 module.exports = function(toResolve, locations, resolveDir) {
 
-    if (toResolve.indexOf("./") !== 0 &&
-        toResolve.indexOf("../") !== 0 &&
-        toResolve.indexOf("*") === -1 &&
-        toResolve.indexOf("/") === -1 &&
-        toResolve.indexOf(".js") !== toResolve.length - 3) {
-        return true;
+    if (!toResolve) {
+        return null;
     }
 
     locations = locations || [];
@@ -20,6 +25,18 @@ module.exports = function(toResolve, locations, resolveDir) {
     }
     if (process.env.NODE_PATH) {
         locations = locations.concat(process.env.NODE_PATH.split(path.delimiter));
+    }
+
+    try {
+        var resolved = require.resolve(toResolve, {
+            paths: locations
+        });
+        if (resolved) {
+            return resolved;
+        }
+    }
+    catch (thrown) {
+        //error(thrown);
     }
 
     var norm = toResolve,
@@ -39,7 +56,7 @@ module.exports = function(toResolve, locations, resolveDir) {
 
     if (abs) {
         if (fs.existsSync(norm)) {
-            if (dirMode || !isDir(norm)) {
+            if (dirMode || !fs.lstatSync(norm).isDirectory()) {
                 return path.normalize(norm) + toResolve.replace(norm, "");
             }
         }
@@ -53,20 +70,11 @@ module.exports = function(toResolve, locations, resolveDir) {
         }
 
         if (fs.existsSync(loc + norm)) {
-            if (dirMode || !isDir(loc + norm)) {
+            if (dirMode || !fs.lstatSync(loc + norm).isDirectory()) {
                 return path.normalize(loc + norm) + toResolve.replace(norm, "");
             }
         }
     }
 
-    try {
-        var resolved = require.resolve(toResolve);
-        if (resolved === toResolve) {
-            return true;
-        }
-        return resolved;
-    }
-    catch (thrown) {}
-
-    return false;
+    return null;
 };
