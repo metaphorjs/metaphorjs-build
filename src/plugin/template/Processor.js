@@ -348,7 +348,7 @@ module.exports = Base.$extend({
     minify: function(html) {
         html = minify(html, {
             collapseWhitespace: true,
-            collapseInlineTagWhitespace: true
+            collapseInlineTagWhitespace: false
         });
         return html;
     }
