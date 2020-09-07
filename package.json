@@ -6,32 +6,28 @@
         "type": "git",
         "url": "https://github.com/metaphorjs/metaphorjs-build.git"
     },
-    "author": "johann kuindji",
+    "author": "Ivan Kuindzhi",
     "license": "MIT",
     "homepage": "https://github.com/metaphorjs/metaphorjs-build",
     "bugs": {
         "url": "https://github.com/metaphorjs/metaphorjs-build/issues"
     },
     "dependencies": {
-        "closurecompiler": "*",
+        "closure-webpack-plugin": "^2.3.0",
         "deep-map": "^1.5.0",
         "esprima": "^4.0.1",
         "glob": "^7.1.6",
+        "google-closure-compiler": "^20200719.0.0",
         "html-minifier": "^3.5.8",
         "jsdom": "^13.2.0",
         "lodash": "^4.17.15",
-        "minimist": "*"
+        "webpack": "^4.44.1",
+        "webpack-cli": "^3.3.12"
     },
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "bin": {
         "mjs-build": "bin/build.js"
-    },
-    "devDependencies": {
-        "@babel/cli": "^7.1.0",
-        "@babel/core": "^7.1.0",
-        "@babel/preset-env": "^7.1.0",
-        "@babel/preset-es2015": "^7.0.0-beta.53"
     }
 }

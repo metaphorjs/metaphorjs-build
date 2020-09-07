@@ -1,6 +1,6 @@
 
-var Config = require("../Config.js"),
-    Builder = require("../Builder.js");
+const   Config = require("../Config.js"),
+        Builder = require("../Builder.js");
 
 /**
  * Build a bundle 
@@ -9,19 +9,20 @@ var Config = require("../Config.js"),
  */
 module.exports = function(name) {
 
-    var config = Config.getCurrent();
+    const config = Config.getCurrent();
+    const package = Config.getCurrentNpmConfig();
 
     if (!config) {
         throw new Error("metaphorjs.json not found in current directory!")
     }
 
-    var run = function(name) {
-        var builder     = new Builder(name, config);
+    const run = function(name) {
+        const builder     = new Builder(name, config, package);
         builder.build();
     };
 
     if (!name) {
-        for (var k in config.build) {
+        for (let k in config.build) {
             run(k);
         }
     }

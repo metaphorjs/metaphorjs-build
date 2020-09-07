@@ -309,19 +309,6 @@ module.exports = Base.$extend({
 
         code = code.replace(/("~[^"]+~":)/g, "\n$1");
 
-        /*if (funcs) {
-            var funcsCode = "{\n",
-                funcLines = [],
-                k;
-
-            for (k in funcs) {
-                funcLines.push('"'+k+'": ' + obj2code(funcs[k]));
-            }
-            funcsCode += funcLines.join(",\n");
-            funcsCode += "\n};\n";
-            code += "\nMetaphorJsPrebuilt['funcs'] = " + funcsCode;
-        }*/
-
         return code;
     }
 });

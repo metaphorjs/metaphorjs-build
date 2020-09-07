@@ -1,8 +1,8 @@
 
 
-var isPlainObject = require("metaphorjs-shared/src/func/isPlainObject.js"),
-    isArray = require("metaphorjs-shared/src/func/isArray.js"),
-    MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js");
+const   isPlainObject = require("metaphorjs-shared/src/func/isPlainObject.js"),
+        isArray = require("metaphorjs-shared/src/func/isArray.js"),
+        MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js");
 
 module.exports = (function() {
 

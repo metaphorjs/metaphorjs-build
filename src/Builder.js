@@ -1,17 +1,19 @@
 require("metaphorjs-promise/src/lib/Promise.js");
 require("./plugin/builder/Cleanup.js")
 
-var fs              = require("fs"),
-    path            = require("path"),
-    cp              = require("child_process"),
-    Base            = require("./Base.js"),
-    Bundle          = require("./Bundle.js"),
-    File            = require("./File.js"),
-    Template        = require("./Template.js"),
-    Config          = require("./Config.js"),
-    extend          = require("metaphorjs-shared/src/func/extend.js"),
-    nextUid         = require("metaphorjs-shared/src/func/nextUid.js"),
-    MetaphorJs      = require("metaphorjs-shared/src/MetaphorJs.js");
+const   fs              = require("fs"),
+        path            = require("path"),
+        Base            = require("./Base.js"),
+        Build           = require("./Build.js"),
+        Webpack         = require("./Webpack.js"),
+        File            = require("./File.js"),
+        Template        = require("./Template.js"),
+        Config          = require("./Config.js"),
+        extend          = require("metaphorjs-shared/src/func/extend.js"),
+        nextUid         = require("metaphorjs-shared/src/func/nextUid.js"),
+        MetaphorJs      = require("metaphorjs-shared/src/MetaphorJs.js");
+
+const { exit } = require("process");
 
 /**
 * @class Builder
@@ -26,45 +28,45 @@ module.exports = Base.$extend({
     /**
      * @constructor
      */
-    $init: function(buildName, projectFile) {
+    $init: function(buildName, projectFile, packageJson) {
 
-        if (!fs.existsSync(projectFile) && 
-            !(projectFile instanceof Config)) {
+        if (!(projectFile instanceof Config) && 
+            !fs.existsSync(projectFile)) {
             throw projectFile + " not found";
         }
 
-        var self            = this;
-
-        self.$$observable.createEvent("pipe", {
+        this.$$observable.createEvent("pipe", {
             returnResult: "pipe",
             expectPromises: true,
             resolvePromises: true
         });
 
-        self.allFiles       = {};
-        self.allTemplates   = {};
-        self.allBundles     = {};
+        this.allFiles       = {};
+        this.allTemplates   = {};
+        this.allBundles     = {};
 
-        self.config         = projectFile instanceof Config ? projectFile : Config.get(projectFile);
-        self.projectFile    = projectFile instanceof Config ? projectFile.path : projectFile;
-        self.bundle         = self.getBundle(buildName, "build");
-        self.buildName      = buildName;
+        this.package        = packageJson;
+        this.config         = projectFile instanceof Config ? projectFile : Config.get(projectFile);
+        this.projectFile    = projectFile instanceof Config ? projectFile.path : projectFile;
+        //this.bundle         = this.getBundle(buildName, "build");
+        this.currentBuild   = new Build(buildName, this);
+        this.buildName      = buildName;
 
-        self.bundle.top     = true;
+        //this.bundle.top     = true;
 
-        self.trigger("init", self);
+        this.trigger("init", this);
     },
 
     getFile: function(filePath, options) {
-        var all = this.allFiles;
+        let all = this.allFiles;
 
         if (!all[filePath]) {
             all[filePath] = new File(filePath, options, this);
         }
         else {
             if (options) {
-                var f = all[filePath];
-                for (var key in options) {
+                let f = all[filePath];
+                for (let key in options) {
                     if (f.getOption(key) !== null) {
                         f.setOption(key, options[key]);
                     }
@@ -76,7 +78,7 @@ module.exports = Base.$extend({
     },
 
     getTemplate: function(filePath, options) {
-        var all = this.allTemplates,
+        let all = this.allTemplates,
             opt;
 
         if (!all[filePath]) {
@@ -86,18 +88,18 @@ module.exports = Base.$extend({
         else {
             opt = extend(options, Template.getOptions(filePath), true);
             if (opt) {
-                var f = all[filePath];
-                for (var key in opt) {
+                let f = all[filePath];
+                for (let key in opt) {
                     if (f.getOption(key) !== null) {
                         f.setOption(key, opt[key]);
                     }
                 }
             }
         }
-    
+
         return all[filePath];
     },
-
+/*
     getBundle: function(name, type) {
         var all = this.allBundles;
         var fullName = ""+type +"/" + name;
@@ -111,12 +113,11 @@ module.exports = Base.$extend({
     bundleExists: function(name, type) {
         return !!this.allBundles[""+type +"/" + name];
     },
-
+*/
     getTargetPath: function() {
-        var self = this, target;
-        target  = self.config.getBuildConfig(self.buildName).target;
-        target  = path.resolve(self.config.base, target);
-        return target;
+        let target;
+        target  = this.config.getBuildConfig(this.buildName).target;
+        return path.resolve(this.config.base, target);
     },
 
     getBuilderDir: function() {
@@ -124,7 +125,7 @@ module.exports = Base.$extend({
     },
 
     getRandTmpFile: function() {
-        var name = "/tmp/build_" + nextUid() + ".js";
+        let name = "/tmp/build_" + nextUid() + ".js";
         if (fs.existsSync(name)) {
             return this.getRandTmpFile();
         }
@@ -132,25 +133,38 @@ module.exports = Base.$extend({
     },
 
     build: function() {
-        var self = this,
-            cfg = self.config.getBuildConfig(self.buildName),
-            pipe = cfg.pipe || [];
-        
-        if (typeof pipe === "string") {
-            pipe = pipe.split("|");
-        }
-        if (pipe.length === 0) {
-            pipe = ["build", "write"];
+        const cfg = this.config.getBuildConfig(this.buildName);
+       
+        if (!cfg) {
+            console.log("Build config not found");
+            exit();
         }
 
-        pipe.forEach(function(processor){
-            if (self["_" + processor]) {
-                self.on("pipe", self["_" + processor], self);
-            }
+        console.log("Building " + this.buildName);
+
+        this.trigger("before-build", this);
+
+        this.currentBuild.collect(this.config, this.buildName);
+        this.trigger("after-collect", this);
+
+        this.currentBuild.prepareBuildList();
+        this.trigger("after-build-list", this);
+
+        this.currentBuild.preparePrebuilt();
+
+        const webpack = new MetaphorJs.build.Webpack({
+            files: this.currentBuild.buildList,
+            config: cfg,
+            package: this.package
+
         });
 
-        self.trigger("pipe");
-        self.$$observable.removeAllListeners("pipe");
+        webpack.createIndex();
+        webpack.createConfig();
+        webpack.run();
+
+        //this.trigger("pipe");
+        //this.$$observable.removeAllListeners("pipe");
     },
 
     /**
@@ -159,142 +173,32 @@ module.exports = Base.$extend({
      */
     _build:          function() {
 
-        var self    = this,
-            code;
+        var code;
 
-        console.log("Building " + self.buildName);
+        console.log("Building " + this.buildName);
 
-        self.trigger("before-build", self);
+        this.trigger("before-build", this);
 
-        self.bundle.collect(self.config, self.buildName);
-        self.trigger("after-collect", self);
+        //this.bundle.collect(this.config, this.buildName);
+        this.currentBuild.collect(this.config, this.buildName);
+        this.trigger("after-collect", this);
 
-        self.bundle.prepareBuildList();
-        self.trigger("after-build-list", self);
+        //this.bundle.prepareBuildList();
+        this.currentBuild.prepareBuildList();
+        this.trigger("after-build-list", this);
 
-        code        = self.bundle.getContent();
-        code        = self.trigger("cleanup", code, self);
-        var res     = self.trigger("build-ready", self, code);
+        
+
+        /*code        = this.bundle.getContent();
+        code        = this.trigger("cleanup", code, this);
+        var res     = this.trigger("build-ready", this, code);
 
         if (typeof res === "string") {
             code    = res;
         }
 
-        return MetaphorJs.lib.Promise.resolve(code);
-    },
-
-    _compile: function(code) {
-        var self    = this,
-            cwd     = process.cwd(),
-            bdir    = self.getBuilderDir(),
-            promise;
-
-        console.log("Compiling " + self.buildName);
-
-        promise = new MetaphorJs.lib.Promise(function(resolve, reject){
-            process.chdir(bdir);
-            
-            var target = self.getRandTmpFile(),
-                out = fs.createWriteStream(target),
-                args = ["ccjs"],
-                bin = "/usr/local/bin/npx",
-                source = self.getRandTmpFile(),
-                proc;
-
-            fs.writeFileSync(source, code);
-            args.push(source);
-            args.push('--language_in=ECMASCRIPT5_STRICT');
-
-            proc = cp.spawn(bin, args);
-
-            proc.stderr.pipe(process.stderr);
-            proc.stdout.pipe(out);
-            proc.on("exit", function() {
-                process.chdir(cwd);
-                var code = fs.readFileSync(target).toString();
-                //fs.unlinkSync(source);
-                fs.unlinkSync(target);
-                resolve(code);
-            });
-            proc.on("error", function(error) {
-                console.log(error);
-                reject(error);
-            });
-        });
-
-        return promise;
-    },
-
-    _babel: function(code) {
-
-        var self    = this,
-            cwd     = process.cwd(),
-            bdir    = self.getBuilderDir(),
-            chdir   = false,
-            bcfg,
-            promise;
-
-        if (fs.existsSync(cwd + "/.babelrc"))  {
-            bcfg = cwd + "/.babelrc";
-        } 
-        else if (fs.existsSync(bdir + "/.babelrc")) {
-            bcfg = bdir + "/.babelrc";
-            chdir = true;
-        }
-
-        console.log("Running babel " + self.buildName);
-
-        promise = new MetaphorJs.lib.Promise(function(resolve, reject){
-
-            chdir && process.chdir(bdir);
-
-            var target = self.getRandTmpFile(),
-                out = fs.createWriteStream(target),
-                args = ["babel"],
-                bin = "/usr/local/bin/npx",
-                source = self.getRandTmpFile(),
-                proc;
-
-            fs.writeFileSync(source, code);
-            args.push(source);
-
-            if (bcfg) {
-                args.push("--config-file");
-                args.push(bcfg);
-            }
-
-            proc = cp.spawn(bin, args);
-            proc.stderr.pipe(process.stderr);
-            proc.stdout.pipe(out);
-            proc.on("exit", function() {
-                chdir && process.chdir(cwd);
-                var code = fs.readFileSync(target).toString();
-                fs.unlinkSync(source);
-                fs.unlinkSync(target);
-                resolve(code);
-            });
-            proc.on("error", function(error) {
-                console.log(error);
-                reject(error);
-            });
-        });
-
-        return promise;
-    },
-
-
-    _write: function(code) {
-        var self    = this,
-            target  = self.getTargetPath();
-
-        console.log("Writing " + self.buildName + " to " + target);
-
-        fs.writeFileSync(target, code);
-        self.trigger("build-written", self, target, code);
-
-        return MetaphorJs.lib.Promise.resolve(code);
+        return MetaphorJs.lib.Promise.resolve(code);*/
     }
-
 
 });
 

@@ -21,8 +21,8 @@ module.exports = MetaphorJs.mixin.Collector = {
         this.$$observable.createEvent("collect-filter", false);
         this.on("collect-filter", this._collectFilter, this);
     },
-    
-    
+
+
     _collectFilter: function(f) {
         return !this.allOmits[f.path];
     },

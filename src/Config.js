@@ -94,11 +94,27 @@ module.exports = function(){
          * @method
          */
         getCurrent: function() {
-            var cwd = process.cwd(),
-                file = cwd + "/metaphorjs.json";
+            const   cwd = process.cwd(),
+                    file = cwd + "/metaphorjs.json";
 
             if (fs.existsSync(file)) {
                 return Config.get(file);
+            }
+
+            return null;
+        },
+
+        /**
+         * Get package.json of the projects
+         * @static
+         * @method
+         */
+        getCurrentNpmConfig: function() {
+            const   cwd = process.cwd(),
+                    file = cwd + "/package.json";
+
+            if (fs.existsSync(file)) {
+                return JSON.parse(fs.readFileSync(file));
             }
 
             return null;
