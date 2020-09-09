@@ -8,6 +8,7 @@ const fs = require("fs");
 const webpack = require("webpack");
 const ClosurePlugin = require('closure-webpack-plugin');
 const obj2code = require("./func/obj2code.js");
+const Dotenv = require("dotenv-webpack");
 
 
 module.exports = cls({
@@ -61,7 +62,19 @@ module.exports = cls({
             wpConfig = {};
         }
 
-        extend(wpConfig, { plugins: [], module: { rules: [] }}, false, true);
+        extend(wpConfig, { 
+            plugins: [], 
+            module: { rules: [] },
+            resolve: {
+                alias: {}
+            }
+        }, false, true);
+
+        wpConfig.plugins.push(
+            new Dotenv({
+                path: "./.env.local"
+            })
+        )
 
         wpConfig.module.rules.push({
             test: function(resource) {
