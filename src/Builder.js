@@ -154,6 +154,7 @@ module.exports = Base.$extend({
 
         const webpack = new MetaphorJs.build.Webpack({
             files: this.currentBuild.buildList,
+            exclude: this.currentBuild.excludeList,
             config: cfg,
             package: this.package
 

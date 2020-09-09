@@ -1,6 +1,7 @@
 
 const   cls = require("metaphorjs-class/src/cls.js"),
-        MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js");
+        MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js"),
+        extend = require("metaphorjs-shared/src/func/extend.js");
 
 const path = require("path");
 const fs = require("fs");
@@ -50,16 +51,24 @@ module.exports = cls({
         
         const config = this.options.config;
         const package = this.options.package;
+        const exclude = this.options.exclude;
         let wpConfig;
 
         if (config.webpackConfig) {
             wpConfig = require(config.webpackConfig);
         }
         else {
-            wpConfig = {
-
-            };
+            wpConfig = {};
         }
+
+        extend(wpConfig, { plugins: [], module: { rules: [] }}, false, true);
+
+        wpConfig.module.rules.push({
+            test: function(resource) {
+                return exclude.indexOf(resource) !== -1;
+            },
+            use: "metaphorjs-build/node_modules/null-loader"
+        })
 
         wpConfig.mode = wpConfig.mode || "production";
         wpConfig.entry = this.indexName;

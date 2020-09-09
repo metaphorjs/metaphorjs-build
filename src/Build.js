@@ -34,6 +34,7 @@ module.exports = Base.$extend({
         this.builder = builder;
         this.name = name;
         this.buildList = [];
+        this.excludeList = [];
         this.templateList = [];
         this.included = {};
         this.templates = {};
@@ -104,6 +105,7 @@ module.exports = Base.$extend({
     prepareBuildList: function() {
 
         this.buildList = Object.keys(this.collected);
+        this.excludeList = Object.keys(this.allOmits);
 
         for (path in this.collectedTemplates) {
             this.addTemplate(this.collectedTemplates[path]);
