@@ -65,9 +65,7 @@ module.exports = cls({
         extend(wpConfig, { 
             plugins: [], 
             module: { rules: [] },
-            resolve: {
-                alias: {}
-            }
+            externals: {}
         }, false, true);
 
         wpConfig.plugins.push(
@@ -113,15 +111,26 @@ module.exports = cls({
 
         if (!wpConfig.optimization) {
 
-            const minimizer = [];
+            
             if (config.useCC === true) {
+                const minimizer = [];
                 minimizer.push(new ClosurePlugin({mode: 'AGGRESSIVE_BUNDLE'}))
+                wpConfig.optimization = {
+                    concatenateModules: false,
+                    minimizer: minimizer
+                };
+            }
+            else {
+                wpConfig.optimization = {
+                    concatenateModules: true
+                };
             }
 
-            wpConfig.optimization = {
-                concatenateModules: !config.useCC,
-                minimizer: minimizer
-            };
+            
+        }
+
+        if (config.externals) {
+            extend(wpConfig.externals, config.externals);
         }
 
         this.wpConfig = wpConfig;
