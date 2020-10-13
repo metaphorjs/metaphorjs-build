@@ -109,24 +109,28 @@ module.exports = cls({
 
         wpConfig.output.libraryTarget = wpConfig.output.libraryTarget || "umd";
 
-        if (!wpConfig.optimization) {
+        if (config.optimize !== false) {
+            if (!wpConfig.optimization) {
 
-            
-            if (config.useCC === true) {
-                const minimizer = [];
-                minimizer.push(new ClosurePlugin({mode: 'AGGRESSIVE_BUNDLE'}))
-                wpConfig.optimization = {
-                    concatenateModules: false,
-                    minimizer: minimizer
-                };
+                if (config.useCC === true) {
+                    const minimizer = [];
+                    minimizer.push(new ClosurePlugin({mode: 'AGGRESSIVE_BUNDLE'}))
+                    wpConfig.optimization = {
+                        concatenateModules: false,
+                        minimizer: minimizer
+                    };
+                }
+                else {
+                    wpConfig.optimization = {
+                        concatenateModules: true
+                    };
+                }
             }
-            else {
-                wpConfig.optimization = {
-                    concatenateModules: true
-                };
-            }
-
-            
+        }
+        else {
+            wpConfig.optimization = {
+                minimize: false
+            };
         }
 
         if (config.externals) {
