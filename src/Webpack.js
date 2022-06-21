@@ -68,11 +68,13 @@ module.exports = cls({
             externals: {}
         }, false, true);
 
-        wpConfig.plugins.push(
-            new Dotenv({
-                path: "./.env.local"
-            })
-        )
+        if (config.dotenv) {
+            wpConfig.plugins.push(
+                new Dotenv({
+                    path: "./.env.local"
+                })
+            )
+        }
 
         wpConfig.module.rules.push({
             test: function(resource) {
@@ -129,7 +131,8 @@ module.exports = cls({
         }
         else {
             wpConfig.optimization = {
-                minimize: false
+                minimize: false,
+                concatenateModules: config.concat || false
             };
         }
 
