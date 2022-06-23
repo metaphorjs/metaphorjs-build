@@ -252,7 +252,7 @@ module.exports = Base.$extend({
             dirs, i, l, dirCfg,
             dirFn;
 
-        walkDom(body, function(node) {
+        walkDom(body, (node) => {
             let nodeType = node.nodeType,
                 id,
                 config;
@@ -272,7 +272,7 @@ module.exports = Base.$extend({
                         dirs = attrSet.directives[dir];
 
                         if (!dirFn) {
-                            console.log("Directive not found: ", dir);
+                            console.log(`Directive not found: "${ dir }" in ${ this.host.path }`);
                             continue;
                         }
 
