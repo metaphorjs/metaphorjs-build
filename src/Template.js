@@ -1,18 +1,18 @@
 
 require("metaphorjs/src/lib/Expression.js");
 
-var fs = require("fs"),
-    nextUid = require("metaphorjs-shared/src/func/nextUid.js"),
-    Base = require("./Base.js"),
-    MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js");
+const fs = require("fs"),
+        nextUid = require("metaphorjs-shared/src/func/nextUid.js"),
+        Base = require("./Base.js"),
+        MetaphorJs = require("metaphorjs-shared/src/MetaphorJs.js");
 
 require("./plugin/template/Processor.js");
 
-module.exports = (function(){
+module.exports = (function() {
 
-var cache = {};
+let cache = {};
 
-var Template = Base.$extend({
+const Template = Base.$extend({
 
     $constructor: function() {
         this.$plugins.push(MetaphorJs.plugin.template.Processor);

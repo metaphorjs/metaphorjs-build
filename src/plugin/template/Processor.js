@@ -6,7 +6,7 @@ require("metaphorjs/src/lib/Config.js");
 require("metaphorjs/src/app/Directive.js");
 require("metaphorjs/src/func/app/prebuilt.js");
 
-var Base = require("../../Base.js"),
+const Base = require("../../Base.js"),
     minify = require('html-minifier').minify,
     toArray = require("metaphorjs-shared/src/func/toArray.js"),
     nextUid = require("metaphorjs-shared/src/func/nextUid.js"),
@@ -17,7 +17,7 @@ var Base = require("../../Base.js"),
     resolvePath = require("../../func/resolvePath.js");
 
 
-var clearPipes = function(struct) {
+const clearPipes = function(struct) {
     var i, l;
     if (struct.pipes) {
         for (i = 0, l = struct.pipes.length; i < l; i++) {
@@ -33,7 +33,7 @@ var clearPipes = function(struct) {
 };
 
 
-var walkDom = function(node, fn) {
+const walkDom = function(node, fn) {
 
     fn(node);
 
@@ -45,7 +45,7 @@ var walkDom = function(node, fn) {
     }
 };
 
-var deflate = function(obj) {
+const deflate = function(obj) {
 
     var k, v, cnt = 0, sub;
 
@@ -74,10 +74,10 @@ var deflate = function(obj) {
     return [cnt, obj];
 };
 
-var directivesIncluded = false;
-var filtersIncluded = false;
+let directivesIncluded = false;
+let filtersIncluded = false;
 
-var includeDirectives = function(builder) {
+const includeDirectives = function(builder) {
 
     var cfg = builder.config.getBuildConfig(builder.buildName) || {},
         pb = cfg.prebuild || {},
@@ -105,8 +105,8 @@ var includeDirectives = function(builder) {
     directivesIncluded = true;
 };
 
-var includeFilters = function(builder) {
-    var cfg = builder.config.getBuildConfig(builder.buildName) || {},
+const includeFilters = function(builder) {
+    const cfg = builder.config.getBuildConfig(builder.buildName) || {},
         pb = cfg.prebuild || {},
         filters = pb.filters || [];
 
@@ -217,16 +217,16 @@ module.exports = Base.$extend({
 
     extractTexts: function(html) {
 
-        var self = this;
+        const self = this;
 
         !filtersIncluded && includeFilters(this.host.builder);
 
         if (MetaphorJs.lib.Text.applicable(html)) {
             html = MetaphorJs.lib.Text.eachText(html, function(expression) {
-                var struct = MetaphorJs.lib.Expression.deconstruct(
+                const struct = MetaphorJs.lib.Expression.deconstruct(
                     expression
                 );
-                var id = MetaphorJs.app.prebuilt.add(
+                const id = MetaphorJs.app.prebuilt.add(
                     "config", 
                     clearPipes(struct)
                 );
@@ -242,24 +242,24 @@ module.exports = Base.$extend({
         !directivesIncluded && includeDirectives(this.host.builder);
         !filtersIncluded && includeFilters(this.host.builder);
 
-        var dom = new jsdom.JSDOM(html, { 
+        const dom = new jsdom.JSDOM(html, { 
                 includeNodeLocations: true 
             }),
             self = this,
             body = dom.window.document.body,
-            cfgs = {},
-            dir, key, expr, 
+            cfgs = {};
+        let dir, key, expr, 
             dirs, i, l, dirCfg,
             dirFn;
 
         walkDom(body, function(node) {
-            var nodeType = node.nodeType,
+            let nodeType = node.nodeType,
                 id,
                 config;
 
             if (nodeType === dom.window.document.ELEMENT_NODE) {
 
-                var attrSet = MetaphorJs.dom.getAttrSet(node);
+                let attrSet = MetaphorJs.dom.getAttrSet(node);
 
                 //console.log(attrSet.directives)
 

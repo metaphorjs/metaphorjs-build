@@ -1,17 +1,18 @@
 require("metaphorjs-promise/src/lib/Promise.js");
 require("./plugin/builder/Cleanup.js")
+require("./Webpack.js");
 
 const   fs              = require("fs"),
         path            = require("path"),
         Base            = require("./Base.js"),
         Build           = require("./Build.js"),
-        Webpack         = require("./Webpack.js"),
         File            = require("./File.js"),
         Template        = require("./Template.js"),
         Config          = require("./Config.js"),
         extend          = require("metaphorjs-shared/src/func/extend.js"),
         nextUid         = require("metaphorjs-shared/src/func/nextUid.js"),
-        MetaphorJs      = require("metaphorjs-shared/src/MetaphorJs.js");
+        MetaphorJs      = require("metaphorjs-shared/src/MetaphorJs.js"),
+        obj2code        = require("./func/obj2code.js");
 
 const { exit } = require("process");
 
@@ -51,6 +52,10 @@ module.exports = Base.$extend({
         //this.bundle         = this.getBundle(buildName, "build");
         this.currentBuild   = new Build(buildName, this);
         this.buildName      = buildName;
+
+        const time = (new Date).getTime();
+        this.entryFilename = `/tmp/wp-${time}.js`;
+        this.prebuiltFilename = `/tmp/wp-prebuilt-${time}.js`;
 
         //this.bundle.top     = true;
 
@@ -132,7 +137,7 @@ module.exports = Base.$extend({
         return name;
     },
 
-    build: function() {
+    prepare: function() {
         const cfg = this.config.getBuildConfig(this.buildName);
        
         if (!cfg) {
@@ -151,7 +156,14 @@ module.exports = Base.$extend({
         this.trigger("after-build-list", this);
 
         this.currentBuild.preparePrebuilt();
+    },
 
+    build: function() {
+
+        this.prepare();
+
+        const cfg = this.config.getBuildConfig(this.buildName);
+        
         const webpack = new MetaphorJs.build.Webpack({
             files: this.currentBuild.buildList,
             exclude: this.currentBuild.excludeList,
@@ -166,6 +178,101 @@ module.exports = Base.$extend({
 
         //this.trigger("pipe");
         //this.$$observable.removeAllListeners("pipe");
+    },
+
+    getBuildList: function() {
+        return this.currentBuild.buildList;
+    },
+
+    getExcludeList: function() {
+        return this.currentBuild.excludeList;
+    },
+
+    rebuild: function() {
+        this.allFiles       = {};
+        this.allTemplates   = {};
+        this.currentBuild   = new Build(this.buildName, this);
+        this.prepare();
+        this.createPrebuildFile();
+        this.createEntryFile();
+    },
+
+    rebuildTemplates: function() {
+
+    },
+    
+
+    getTemplateWatcher: function() {
+        return {
+            apply: (compiler) => {
+                compiler.hooks.watchRun.tap("MjsWatchRun",
+                    (context) => {
+                        if (context.modifiedFiles) {
+                            const files = [ ...context.modifiedFiles ];
+                            const isTpl = !!files.find(f => f.match(/\.html$/));
+
+                            if (isTpl) {
+                                this.rebuild();
+                            }
+                        }
+                    });
+            }
+        }
+    },
+
+    getTarget: function() {
+        const cfg = this.config.getBuildConfig(this.buildName);
+        let target = cfg.target;
+        if (target[0] !== "/" && target[0] !== ".") {
+            if (target.indexOf("/") !== -1) {
+                target = target.split("/");
+                return {
+                    filename: target.pop(),
+                    path: path.resolve("./" + target.join("/"))
+                }
+            }
+            else {
+                return {
+                    path: path.resolve("./"),
+                    filename: target
+                }
+            }
+        }
+    },
+
+    getTemplateList: function() {
+
+    },
+
+    createPrebuildFile: function() {
+        const mjsPath = require.resolve("metaphorjs-shared/src/MetaphorJs.js");
+        let content = `const MetaphorJs = require("${ mjsPath }");` + "\n";
+        content +=     "MetaphorJs.prebuilt = " + 
+                            obj2code(MetaphorJs.app.prebuilt.getStorage()) + "\n";
+        fs.writeFileSync(this.prebuiltFilename, content);
+        return this.prebuiltFilename;
+    },
+
+
+    createEntryFile: function() {
+
+        const files = this.currentBuild.buildList,
+              mjsPath = require.resolve("metaphorjs-shared/src/MetaphorJs.js");
+
+        let content = "";
+        content += `const MetaphorJs = require("${ mjsPath }");` + "\n";
+        content += `require("${ this.prebuiltFilename }");` + "\n";
+        files.forEach(f => {
+            content += `require("${ f }");` + "\n";
+        });
+
+        fs.writeFileSync(this.entryFilename, content);
+        
+        //this.pbltName = pblt;
+        //this.pbltContent = prebuilt;
+        //return this.indexContent = content;
+
+        return this.entryFilename;
     },
 
     /**
